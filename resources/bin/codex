@@ -1,0 +1,100 @@
+#!/usr/bin/env bash
+# seance Codex CLI wrapper — intercepts `codex` invocations inside seance
+# terminals and injects lifecycle hooks so seance can track session state.
+set -euo pipefail
+
+# ── Find the real codex binary, skipping our own directory ──────────────────
+
+WRAPPER_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REAL_CODEX=""
+IFS=: read -ra PATH_DIRS <<< "$PATH"
+for dir in "${PATH_DIRS[@]}"; do
+    [[ -z "$dir" ]] && continue
+    resolved="$(cd "$dir" 2>/dev/null && pwd)" || continue
+    [[ "$resolved" == "$WRAPPER_DIR" ]] && continue
+    if [[ -x "$dir/codex" ]]; then
+        REAL_CODEX="$dir/codex"
+        break
+    fi
+done
+
+if [[ -z "$REAL_CODEX" ]]; then
+    echo "codex: command not found" >&2
+    exit 127
+fi
+
+# ── Pass-through conditions ──────────────────────────────────────────────────
+
+# Not inside seance
+if [[ -z "${SEANCE_SURFACE_ID:-}" ]]; then
+    exec "$REAL_CODEX" "$@"
+fi
+
+# Hooks explicitly disabled
+if [[ "${SEANCE_CODEX_HOOKS_DISABLED:-}" == "1" ]]; then
+    exec "$REAL_CODEX" "$@"
+fi
+
+# Socket health check (0.75s timeout)
+if ! timeout 0.75 seance ctl --socket "${SEANCE_SOCKET_PATH:-}" ping >/dev/null 2>&1; then
+    exec "$REAL_CODEX" "$@"
+fi
+
+# ── Pass-through subcommands ─────────────────────────────────────────────────
+
+case "${1:-}" in
+    mcp|login|logout|debug|sandbox|completion|mcp-server|app-server|features|apply)
+        exec "$REAL_CODEX" "$@"
+        ;;
+esac
+
+# ── Create per-session isolated config dir ──────────────────────────────────
+# CODEX_HOME env var redirects both config.toml and hooks.json discovery.
+# We symlink the user's real config and write our own hooks.json, avoiding
+# any mutation of ~/.codex/hooks.json (no Python, no race conditions, no
+# cleanup traps).
+
+SESSION_DIR="$HOME/.cache/seance-codex/$SEANCE_SURFACE_ID"
+rm -rf "$SESSION_DIR"
+mkdir -p "$SESSION_DIR"
+
+REAL_HOME="${CODEX_HOME:-$HOME/.codex}"
+
+# Symlink everything from real config dir except hooks.json
+if [[ -d "$REAL_HOME" ]]; then
+    for item in "$REAL_HOME"/*; do
+        [[ "$(basename "$item")" == "hooks.json" ]] && continue
+        ln -sf "$item" "$SESSION_DIR/"
+    done
+fi
+
+# Write seance hooks (replaces any user hooks — merging is not supported)
+cat > "$SESSION_DIR/hooks.json" <<'HOOKEOF'
+{
+  "hooks": {
+    "SessionStart": [{"hooks": [{"type": "command", "command": "seance ctl codex-hook session-start", "timeout": 10}]}],
+    "SessionEnd": [{"hooks": [{"type": "command", "command": "seance ctl codex-hook session-end", "timeout": 10}]}],
+    "UserPromptSubmit": [{"hooks": [{"type": "command", "command": "seance ctl codex-hook prompt-submit", "timeout": 10}]}],
+    "PreToolUse": [{"hooks": [{"type": "command", "command": "seance ctl codex-hook pre-tool-use", "timeout": 10}]}],
+    "PostToolUse": [{"hooks": [{"type": "command", "command": "seance ctl codex-hook post-tool-use", "timeout": 10}]}],
+    "Stop": [{"hooks": [{"type": "command", "command": "seance ctl codex-hook stop", "timeout": 10}]}]
+  }
+}
+HOOKEOF
+
+# Export session dir so seance can clean it up on pane exit
+export SEANCE_CODEX_SESSION_DIR="$SESSION_DIR"
+export SEANCE_CODEX_PID=$$
+
+# ── Launch codex (no exec — wrapper must survive for cleanup) ───────────────
+
+CODEX_HOME="$SESSION_DIR" "$REAL_CODEX" --enable codex_hooks "$@"
+rc=$?
+
+# ── Session-end cleanup ─────────────────────────────────────────────────────
+# Codex may not fire SessionEnd, so we always run it from the wrapper.
+
+seance ctl codex-hook session-end <<< "{}" 2>/dev/null || true
+rm -rf "$SESSION_DIR"
+
+exit $rc

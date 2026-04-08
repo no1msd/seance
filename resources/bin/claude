@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+# seance Claude Code wrapper — intercepts `claude` invocations inside seance
+# terminals and injects lifecycle hooks so seance can track session state.
+set -euo pipefail
+
+# ── Find the real claude binary, skipping our own directory ──────────────────
+
+WRAPPER_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REAL_CLAUDE=""
+IFS=: read -ra PATH_DIRS <<< "$PATH"
+for dir in "${PATH_DIRS[@]}"; do
+    [[ -z "$dir" ]] && continue
+    resolved="$(cd "$dir" 2>/dev/null && pwd)" || continue
+    [[ "$resolved" == "$WRAPPER_DIR" ]] && continue
+    if [[ -x "$dir/claude" ]]; then
+        REAL_CLAUDE="$dir/claude"
+        break
+    fi
+done
+
+if [[ -z "$REAL_CLAUDE" ]]; then
+    echo "claude: command not found" >&2
+    exit 127
+fi
+
+# ── Pass-through conditions ──────────────────────────────────────────────────
+
+# Not inside seance
+if [[ -z "${SEANCE_SURFACE_ID:-}" ]]; then
+    exec "$REAL_CLAUDE" "$@"
+fi
+
+# Hooks explicitly disabled
+if [[ "${SEANCE_CLAUDE_HOOKS_DISABLED:-}" == "1" ]]; then
+    exec "$REAL_CLAUDE" "$@"
+fi
+
+# Socket health check (0.75s timeout)
+if ! timeout 0.75 seance ctl --socket "${SEANCE_SOCKET_PATH:-}" ping >/dev/null 2>&1; then
+    exec "$REAL_CLAUDE" "$@"
+fi
+
+# ── Pass-through subcommands ─────────────────────────────────────────────────
+
+case "${1:-}" in
+    mcp|config|api-key)
+        exec "$REAL_CLAUDE" "$@"
+        ;;
+esac
+
+# ── Unset nested-session detection ───────────────────────────────────────────
+
+unset CLAUDECODE
+
+# ── Check if session ID injection should be skipped ──────────────────────────
+
+SKIP_SESSION_ID=0
+for arg in "$@"; do
+    case "$arg" in
+        --resume|--resume=*|--session-id|--session-id=*|--continue|-c)
+            SKIP_SESSION_ID=1
+            break
+            ;;
+    esac
+done
+
+# ── Export PID (becomes claude's PID after exec) ─────────────────────────────
+
+export SEANCE_CLAUDE_PID=$$
+
+# ── Build hooks JSON and exec ────────────────────────────────────────────────
+
+HOOKS_JSON='{"hooks":{
+  "SessionStart":[{"matcher":"","hooks":[{"type":"command","command":"seance ctl claude-hook session-start","timeout":10}]}],
+  "Stop":[{"matcher":"","hooks":[{"type":"command","command":"seance ctl claude-hook stop","timeout":10}]}],
+  "SessionEnd":[{"matcher":"","hooks":[{"type":"command","command":"seance ctl claude-hook session-end","timeout":1}]}],
+  "Notification":[{"matcher":"","hooks":[{"type":"command","command":"seance ctl claude-hook notification","timeout":10}]}],
+  "UserPromptSubmit":[{"matcher":"","hooks":[{"type":"command","command":"seance ctl claude-hook prompt-submit","timeout":10}]}],
+  "PreToolUse":[{"matcher":"","hooks":[{"type":"command","command":"seance ctl claude-hook pre-tool-use","timeout":5,"async":true}]}]
+}}'
+
+if [[ "$SKIP_SESSION_ID" -eq 0 ]]; then
+    SESSION_ID="$(uuidgen | tr '[:upper:]' '[:lower:]')"
+    exec "$REAL_CLAUDE" --session-id "$SESSION_ID" --settings "$HOOKS_JSON" "$@"
+else
+    exec "$REAL_CLAUDE" --settings "$HOOKS_JSON" "$@"
+fi

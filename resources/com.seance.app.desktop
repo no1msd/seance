@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=Séance
+Comment=Terminal multiplexer with AI agent support
+Exec=seance
+Icon=com.seance.app
+Terminal=false
+Type=Application
+Categories=System;TerminalEmulator;
+Keywords=terminal;multiplexer;shell;console;
+StartupNotify=true
+StartupWMClass=com.seance.app

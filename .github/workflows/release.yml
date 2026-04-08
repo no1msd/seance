@@ -1,0 +1,197 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version string for dry-run build (no release will be published)'
+        default: '0.0.0-test'
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Compute version
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+          else
+            echo "VERSION=${{ inputs.version }}" >> "$GITHUB_ENV"
+          fi
+
+      - name: Create source tarball
+        run: |
+          # Vendored source tarball with submodules included, so
+          # downstream packagers (AUR, etc.) can build from a single
+          # archive without needing to recurse into git submodules.
+          # Must run before any build step pollutes the working tree.
+          TOPDIR="seance-${VERSION}"
+          OUT="${TOPDIR}-src.tar.gz"
+          tar -czf "$OUT" \
+            --transform "s,^\\./,${TOPDIR}/," \
+            --exclude="./${OUT}" \
+            --exclude-vcs \
+            --exclude='./AppDir' \
+            --exclude='./squashfs-root' \
+            --exclude='./*.AppImage' \
+            --exclude='./zig-out' \
+            --exclude='./.zig-cache' \
+            --exclude='./linuxdeploy*' \
+            --exclude='./demo.gif' \
+            ./
+          ls -lh "$OUT"
+
+      - name: Install Zig
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.15.2
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgtk-4-dev \
+            libadwaita-1-dev \
+            libnotify-dev \
+            libcanberra-dev \
+            libx11-dev \
+            libwayland-dev \
+            libegl-dev \
+            libgl-dev \
+            libfontconfig-dev \
+            ncurses-bin \
+            librsvg2-common \
+            libgdk-pixbuf2.0-bin \
+            libglib2.0-bin \
+            glib-networking \
+            libfuse2 \
+            patchelf \
+            desktop-file-utils \
+            appstream \
+            file \
+            zsync \
+            squashfs-tools
+
+      - name: Log GTK / libadwaita versions
+        run: |
+          echo "gtk4: $(pkg-config --modversion gtk4)"
+          echo "libadwaita-1: $(pkg-config --modversion libadwaita-1)"
+
+      - name: Build
+        run: zig build -p AppDir/usr -Doptimize=ReleaseSafe -Dstrip=true
+
+      - name: Stage AppImage top-level files
+        run: |
+          cp resources/com.seance.app.desktop AppDir/com.seance.app.desktop
+          cp resources/icons/hicolor/scalable/apps/com.seance.app.svg AppDir/com.seance.app.svg
+
+      - name: Download linuxdeploy and GTK plugin
+        run: |
+          curl -fL -o linuxdeploy-x86_64.AppImage \
+            https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          # The linuxdeploy-plugin-gtk repo no longer publishes a `continuous`
+          # release, so fetch the script directly from a pinned commit on master.
+          curl -fL -o linuxdeploy-plugin-gtk.sh \
+            https://raw.githubusercontent.com/linuxdeploy/linuxdeploy-plugin-gtk/3b67a1d1c1b0c8268f57f2bce40fe2d33d409cea/linuxdeploy-plugin-gtk.sh
+          chmod +x linuxdeploy-x86_64.AppImage linuxdeploy-plugin-gtk.sh
+
+      - name: Build AppImage
+        env:
+          ARCH: x86_64
+          DEPLOY_GTK_VERSION: "4"
+        run: |
+          export OUTPUT="seance-${VERSION}-x86_64.AppImage"
+          ./linuxdeploy-x86_64.AppImage \
+            --appdir AppDir \
+            --plugin gtk \
+            --output appimage \
+            --desktop-file AppDir/com.seance.app.desktop \
+            --icon-file AppDir/com.seance.app.svg
+
+      - name: Verify glibc floor
+        run: |
+          max_glibc=$(objdump -T AppDir/usr/bin/seance \
+            | grep -oE 'GLIBC_[0-9]+\.[0-9]+' \
+            | sed 's/GLIBC_//' \
+            | sort -V \
+            | tail -1)
+          echo "Highest glibc symbol required: $max_glibc"
+          highest_allowed="2.39"
+          if [ "$(printf '%s\n' "$max_glibc" "$highest_allowed" | sort -V | tail -1)" != "$highest_allowed" ]; then
+            echo "ERROR: binary requires glibc > $highest_allowed (needs $max_glibc)"
+            exit 1
+          fi
+
+      - name: Extract AppImage for inspection
+        run: |
+          # Newer linuxdeploy embeds the squashfs at an offset that
+          # `unsquashfs` can't auto-detect on the AppImage file itself, so use
+          # the AppImage's own runtime to extract into ./squashfs-root.
+          ./seance-${VERSION}-x86_64.AppImage --appimage-extract >/dev/null
+
+      - name: Verify no bundled GL drivers
+        run: |
+          bundled=$(find squashfs-root \
+            \( -name 'libEGL*' \
+               -o -name 'libGL.so*' \
+               -o -name 'libGLX*' \
+               -o -name 'libgbm*' \
+               -o -name '*_dri.so' \) -print)
+          if [ -n "$bundled" ]; then
+            echo "ERROR: AppImage bundles GL/EGL/GBM/DRI libraries; these must come from the host"
+            echo "$bundled"
+            exit 1
+          fi
+
+      - name: Verify themes and terminfo are bundled
+        run: |
+          theme_count=$(find squashfs-root/usr/share/ghostty/themes -type f 2>/dev/null | wc -l)
+          if [ "$theme_count" -lt 100 ]; then
+            echo "ERROR: expected >100 ghostty theme entries, found $theme_count"
+            exit 1
+          fi
+          if [ ! -f squashfs-root/usr/share/terminfo/x/xterm-ghostty ]; then
+            echo "ERROR: xterm-ghostty terminfo entry not found"
+            exit 1
+          fi
+
+      - name: Verify AppRun is the GTK plugin's wrapper
+        run: |
+          if ! head -20 squashfs-root/AppRun | grep -q 'apprun-hooks'; then
+            echo "ERROR: AppRun does not source apprun-hooks; linuxdeploy-plugin-gtk env vars will not be set"
+            head -20 squashfs-root/AppRun
+            exit 1
+          fi
+
+      - name: Smoke test
+        run: ./seance-${VERSION}-x86_64.AppImage --appimage-extract-and-run --help
+
+      - name: Upload AppImage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: seance-${{ env.VERSION }}-x86_64.AppImage
+          path: seance-${{ env.VERSION }}-x86_64.AppImage
+          if-no-files-found: error
+
+      - name: Upload source tarball artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: seance-${{ env.VERSION }}-src.tar.gz
+          path: seance-${{ env.VERSION }}-src.tar.gz
+          if-no-files-found: error
+
+      - name: Create GitHub Release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            seance-*-x86_64.AppImage
+            seance-*-src.tar.gz
+          generate_release_notes: true

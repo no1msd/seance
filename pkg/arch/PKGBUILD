@@ -1,0 +1,63 @@
+# Maintainer: Dániel Sipka <no1msd@users.noreply.github.com>
+pkgname=seance
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='GPU-accelerated terminal multiplexer with AI agent support'
+arch=('x86_64')
+url='https://github.com/no1msd/seance'
+license=('MIT')
+depends=(
+    'gtk4'
+    'libadwaita'
+    'libnotify'
+    'libcanberra'
+    'libx11'
+    'wayland'
+    'mesa'
+    'fontconfig'
+    'hicolor-icon-theme'
+)
+makedepends=(
+    'zig>=0.15.2'
+    'ncurses'
+    'pkg-config'
+)
+
+# Ghostty themes tarball, pinned in build.zig.zon under .ghostty_themes.
+# Bump together with the .zon entry on each release that updates it.
+_themes_file='ghostty-themes-release-20260216-151611-fc73ce3.tgz'
+
+source=(
+    "$pkgname-$pkgver-src.tar.gz::$url/releases/download/v$pkgver/$pkgname-$pkgver-src.tar.gz"
+    "https://deps.files.ghostty.org/$_themes_file"
+)
+# Don't let makepkg extract the themes tarball; `zig fetch` consumes it
+# in prepare() and stores it in the package cache by multihash.
+noextract=("$_themes_file")
+sha256sums=(
+    'SKIP'  # TODO: replace with the v0.1.0 source tarball sha256 once published
+    '14200bb86a0c814ab69609d500b280b396b6d2eb835edf0676de4a789c0aa8fd'
+)
+
+prepare() {
+    # Pre-populate Zig's package cache with the themes tarball so the
+    # build needs no network access. `zig fetch` against a local file
+    # extracts and stores it under its multihash, matching the entry
+    # in build.zig.zon, so b.lazyDependency() finds it offline.
+    export ZIG_GLOBAL_CACHE_DIR="$srcdir/.zig-cache"
+    cd "$pkgname-$pkgver"
+    zig fetch --save=false "$srcdir/$_themes_file"
+}
+
+build() {
+    export ZIG_GLOBAL_CACHE_DIR="$srcdir/.zig-cache"
+    cd "$pkgname-$pkgver"
+    zig build -p "$srcdir/out" -Doptimize=ReleaseSafe -Dstrip=true
+}
+
+package() {
+    install -d "$pkgdir/usr"
+    cp -r "$srcdir/out"/* "$pkgdir/usr/"
+    install -Dm644 "$pkgname-$pkgver/LICENSE" \
+        "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

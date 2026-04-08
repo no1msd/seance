@@ -1,0 +1,49 @@
+# seance configuration
+# Place this file at ~/.config/seance/config.toml
+
+[font]
+# family = "Monospace"
+# size = 13.0
+
+[colors]
+# theme = ""                     # ghostty theme name — overrides ghostty's own theme setting
+                                 # when empty (default), ghostty's resolved theme is used
+# background-opacity = 1.0
+
+[window]
+# width = 1200
+# height = 800
+# decoration-mode = "auto"         # "auto" (GNOME=CSD, else=SSD), "csd", or "ssd"
+
+[sidebar]
+# position = "left"              # "left" or "right"
+# width = 200
+# visible = true
+# show-notification-text = true  # latest notification text below workspace title
+# show-status = true             # custom status metadata pills
+# show-logs = true               # most recent log message
+# show-progress = true           # active progress indicator
+# show-branch = true             # git branch and working directory
+# show-ports = true              # detected listening ports
+
+[terminal]
+# scrollback-lines = 10000
+# cursor-shape = "block"         # "block", "ibeam", "underline"
+# cursor-blink = true
+
+[behavior]
+# bell-notification = true
+# desktop-notifications = true
+# focus-follows-mouse = false
+# confirm-close-window = true
+
+[notifications]
+# sound = "default"              # "default", "none", or path to .wav/.ogg file
+
+[keybinds]
+# command_palette = "ctrl+shift+p"
+# open_folder = "ctrl+shift+o"
+# reload_config = "ctrl+shift+comma"
+
+[socket]
+# path = ""

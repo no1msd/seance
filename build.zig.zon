@@ -1,0 +1,19 @@
+.{
+    .name = .seance,
+    .version = "0.1.0",
+    .fingerprint = 0xdf7dfd0efeec22c7,
+    .minimum_zig_version = "0.15.2",
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+    },
+    .dependencies = .{
+        .ghostty = .{ .path = "ghostty" },
+        .ghostty_themes = .{
+            .url = "https://deps.files.ghostty.org/ghostty-themes-release-20260216-151611-fc73ce3.tgz",
+            .hash = "N-V-__8AABVbAwBwDRyZONfx553tvMW8_A2OKUoLzPUSRiLF",
+            .lazy = true,
+        },
+    },
+}

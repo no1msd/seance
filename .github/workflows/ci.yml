@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Install Zig
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.15.2
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgtk-4-dev \
+            libadwaita-1-dev \
+            libnotify-dev \
+            libcanberra-dev \
+            libx11-dev \
+            libwayland-dev \
+            libegl-dev \
+            libgl-dev \
+            libfontconfig-dev \
+            xvfb
+
+      - name: Build
+        run: zig build
+
+      - name: Unit tests
+        run: zig build test
+
+      - name: E2E tests
+        run: xvfb-run zig build e2e
