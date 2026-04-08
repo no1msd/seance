@@ -34,9 +34,11 @@ jobs:
           # Must run before any build step pollutes the working tree.
           TOPDIR="seance-${VERSION}"
           OUT="${TOPDIR}-src.tar.gz"
-          tar -czf "$OUT" \
+          # Write the archive outside the working tree first; otherwise
+          # tar sees its own output file growing in `./` and exits 1 with
+          # "file changed as we read it", even though the file is excluded.
+          tar -czf "/tmp/${OUT}" \
             --transform "s,^\\./,${TOPDIR}/," \
-            --exclude="./${OUT}" \
             --exclude-vcs \
             --exclude='./AppDir' \
             --exclude='./squashfs-root' \
@@ -46,6 +48,7 @@ jobs:
             --exclude='./linuxdeploy*' \
             --exclude='./demo.gif' \
             ./
+          mv "/tmp/${OUT}" "./${OUT}"
           ls -lh "$OUT"
 
       - name: Install Zig
