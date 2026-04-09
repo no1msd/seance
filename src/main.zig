@@ -28,10 +28,12 @@ pub fn main() !void {
     // desktop GL context. See ghostty GTK apprt setGtkEnv().
     //
     // GDK_DISABLE is for GTK 4.16+; GDK_DEBUG is the equivalent for
-    // GTK 4.14-4.15. Set both so it works regardless of GTK version
-    // (the AppImage bundles GTK 4.14 from the Ubuntu 24.04 build host).
+    // GTK 4.14-4.15. Only set GDK_DEBUG when compiled against older GTK
+    // to avoid "Unrecognized value" warnings on 4.16+.
     _ = c.setenv("GDK_DISABLE", "gles-api,vulkan", 0);
-    _ = c.setenv("GDK_DEBUG", "gl-disable-gles,vulkan-disable", 0);
+    if (comptime c.GTK_MINOR_VERSION < 16) {
+        _ = c.setenv("GDK_DEBUG", "gl-disable-gles,vulkan-disable", 0);
+    }
 
     const app = App.create();
     const status = App.run(app);
