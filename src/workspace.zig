@@ -455,6 +455,10 @@ pub const Workspace = struct {
         const solo_expand = live_count == 1;
         if (solo_expand) total_strip_width = @max(total_strip_width, 1.0);
 
+        // Round camera offset once so that panning shifts all columns by
+        // the same whole-pixel amount, preventing 1 px jumps on switch.
+        const cam_px = @round(self.camera * fw);
+
         var x: f64 = 0.0; // layout position (closing columns shrink their slot)
         var x_full: f64 = 0.0; // original position (full widths, for closing columns)
         for (self.columns.items, 0..) |col, col_idx| {
@@ -468,8 +472,11 @@ pub const Workspace = struct {
             // scale animation stays centered on the column being closed,
             // not on the column sliding in from the right.
             const pos = if (col.closing) x_full else x;
-            const screen_x = (pos - self.camera) * fw;
-            const pixel_w: f64 = effective_w * fw;
+            // Round column edge and camera independently so camera pans
+            // always move columns by integer pixel amounts.
+            const pos_px = @round(pos * fw);
+            const screen_x = pos_px - cam_px;
+            const pixel_w: f64 = @round((pos + effective_w) * fw) - pos_px;
 
             // Opening animation: scale from 50% to 100%, centered via transform
             const col_scale = 0.5 + 0.5 * col.open_anim;
@@ -541,13 +548,15 @@ pub const Workspace = struct {
     /// and gtk_fixed_move write to the same internal field, so position must
     /// be included in the transform itself.
     fn setChildTransform(fixed: *c.GtkWidget, widget: *c.GtkWidget, scale: f32, width: f32, height: f32, pos_x: f64, pos_y: f64) void {
-        const px: f32 = @floatCast(pos_x);
-        const py: f32 = @floatCast(pos_y);
         if (scale >= 0.999) {
             // No scale — use normal positioning (also clears any prior transform).
-            c.gtk_fixed_move(@ptrCast(fixed), widget, pos_x, pos_y);
+            // Round to pixel boundaries so GTK composites the GL texture
+            // without bilinear filtering, which causes blurry terminal text.
+            c.gtk_fixed_move(@ptrCast(fixed), widget, @round(pos_x), @round(pos_y));
             return;
         }
+        const px: f32 = @floatCast(pos_x);
+        const py: f32 = @floatCast(pos_y);
         const cx = width / 2.0;
         const cy = height / 2.0;
         // Combined: translate(pos) * scale_from_center(cx, cy, s)
@@ -1182,6 +1191,7 @@ pub const Workspace = struct {
         }
         const solo_expand = live_count == 1;
 
+        const cam_px = @round(self.camera * fw);
         var x: f64 = 0.0;
         for (self.columns.items, 0..) |col, col_idx| {
             const effective_w = if (solo_expand and !col.closing)
@@ -1189,8 +1199,9 @@ pub const Workspace = struct {
             else
                 col.width;
 
-            const screen_x = (x - self.camera) * fw;
-            const pixel_w = effective_w * fw;
+            const pos_px = @round(x * fw);
+            const screen_x = pos_px - cam_px;
+            const pixel_w = @round((x + effective_w) * fw) - pos_px;
 
             // Column handle: between col_idx-1 and col_idx
             if (col_idx > 0 and !col.closing and col_h < max_col_handles) {
