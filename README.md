@@ -23,7 +23,7 @@ Séance automatically injects hooks into [Claude Code](https://docs.anthropic.co
 
 ### Scrolling layout
 
-Panes are arranged in a horizontal strip that you scroll through, borrowing the layout model from [niri](https://github.com/YaLTeR/niri). Adding a pane never shrinks existing ones.
+Panes are arranged in a horizontal strip that you scroll through, borrowing the layout model from [niri](https://github.com/YaLTeR/niri).
 
 ### Scriptable
 
