@@ -26,7 +26,12 @@ pub fn main() !void {
     // Ghostty requires desktop OpenGL 4.3+, not GLES. Disable GLES
     // and Vulkan before GTK/GDK initialization so that GDK creates a
     // desktop GL context. See ghostty GTK apprt setGtkEnv().
+    //
+    // GDK_DISABLE is for GTK 4.16+; GDK_DEBUG is the equivalent for
+    // GTK 4.14-4.15. Set both so it works regardless of GTK version
+    // (the AppImage bundles GTK 4.14 from the Ubuntu 24.04 build host).
     _ = c.setenv("GDK_DISABLE", "gles-api,vulkan", 0);
+    _ = c.setenv("GDK_DEBUG", "gl-disable-gles,vulkan-disable", 0);
 
     const app = App.create();
     const status = App.run(app);

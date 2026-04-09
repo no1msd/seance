@@ -481,8 +481,9 @@ fn onGlRealize(_: *c.GtkGLArea, user_data: c.gpointer) callconv(.c) void {
     std.log.debug("pane {d}: onGlRealize", .{pane.id});
 
     c.gtk_gl_area_make_current(gl_area);
-    if (c.gtk_gl_area_get_error(gl_area) != null) {
-        std.log.err("pane {d}: GL context error on realize", .{pane.id});
+    if (c.gtk_gl_area_get_error(gl_area)) |gl_err| {
+        const msg: [*c]const u8 = gl_err.*.message orelse "unknown";
+        std.log.err("pane {d}: GL context error on realize: {s}", .{ pane.id, msg });
         return;
     }
 

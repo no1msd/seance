@@ -109,16 +109,14 @@ jobs:
             https://raw.githubusercontent.com/linuxdeploy/linuxdeploy-plugin-gtk/3b67a1d1c1b0c8268f57f2bce40fe2d33d409cea/linuxdeploy-plugin-gtk.sh
           chmod +x linuxdeploy-x86_64.AppImage linuxdeploy-plugin-gtk.sh
 
-      - name: Build AppImage
+      - name: Bundle AppImage dependencies
         env:
           ARCH: x86_64
           DEPLOY_GTK_VERSION: "4"
         run: |
-          export OUTPUT="seance-${VERSION}-x86_64.AppImage"
           ./linuxdeploy-x86_64.AppImage \
             --appdir AppDir \
             --plugin gtk \
-            --output appimage \
             --desktop-file AppDir/com.seance.app.desktop \
             --icon-file AppDir/com.seance.app.svg
 
@@ -136,14 +134,28 @@ jobs:
             exit 1
           fi
 
-      - name: Extract AppImage for inspection
+      - name: Patch AppDir
         run: |
-          # Newer linuxdeploy embeds the squashfs at an offset that
-          # `unsquashfs` can't auto-detect on the AppImage file itself, so use
-          # the AppImage's own runtime to extract into ./squashfs-root.
+          # Remove GStreamer media module (not used, causes GLib version mismatches)
+          rm -vf AppDir/usr/lib/gtk-4.0/*/media/libmedia-gstreamer.so
+
+          # Remove GTK_THEME override (interferes with libadwaita's stylesheet)
+          sed -i '/^export GTK_THEME/d' AppDir/apprun-hooks/linuxdeploy-plugin-gtk.sh
+
+      - name: Build AppImage
+        env:
+          ARCH: x86_64
+        run: |
+          export OUTPUT="seance-${VERSION}-x86_64.AppImage"
+          ./linuxdeploy-x86_64.AppImage \
+            --appdir AppDir \
+            --output appimage
+
+      - name: Extract AppImage for verification
+        run: |
           ./seance-${VERSION}-x86_64.AppImage --appimage-extract >/dev/null
 
-      - name: Verify no bundled GL drivers
+      - name: Verify no host-coupled libraries
         run: |
           bundled=$(find squashfs-root \
             \( -name 'libEGL*' \
@@ -152,7 +164,7 @@ jobs:
                -o -name 'libgbm*' \
                -o -name '*_dri.so' \) -print)
           if [ -n "$bundled" ]; then
-            echo "ERROR: AppImage bundles GL/EGL/GBM/DRI libraries; these must come from the host"
+            echo "ERROR: AppImage bundles host-coupled libraries that must come from the host:"
             echo "$bundled"
             exit 1
           fi
