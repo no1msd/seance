@@ -25,7 +25,9 @@ var ghostty_orig_resources_len: usize = 0;
 // Path to our runtime wrapper resources dir.
 var wrapper_dir_buf: [std.fs.max_path_bytes]u8 = undefined;
 var wrapper_dir_len: usize = 0;
-// Path to seance's own bundled themes directory (<prefix>/share/ghostty/themes).
+// Path to seance's own bundled themes directory.
+// Usually <prefix>/share/ghostty/themes, but distro packages that bundle
+// resources under share/seance/ghostty use that location instead.
 var seance_themes_dir_buf: [std.fs.max_path_bytes]u8 = undefined;
 var seance_themes_dir_len: usize = 0;
 
@@ -42,15 +44,21 @@ pub fn getGhosttyOrigResourcesDir() ?[]const u8 {
 }
 
 /// Locate seance's own bundled themes dir relative to the executable.
+/// Tries the seance-private location first (used by distro packages that
+/// move share/ghostty under share/seance/ghostty to avoid conflicts).
 fn findSeanceThemesDir() void {
     var exe_buf: [std.fs.max_path_bytes]u8 = undefined;
     const exe_path = std.fs.selfExePath(&exe_buf) catch return;
     const exe_dir = std.fs.path.dirname(exe_path) orelse return;
     const prefix = std.fs.path.dirname(exe_dir) orelse return;
-    const path = std.fmt.bufPrint(&seance_themes_dir_buf, "{s}/share/ghostty/themes", .{prefix}) catch return;
-    if (std.fs.accessAbsolute(path, .{})) {
-        seance_themes_dir_len = path.len;
-    } else |_| {}
+    const suffixes = [_][]const u8{ "share/seance/ghostty/themes", "share/ghostty/themes" };
+    for (suffixes) |suffix| {
+        const path = std.fmt.bufPrint(&seance_themes_dir_buf, "{s}/{s}", .{ prefix, suffix }) catch return;
+        if (std.fs.accessAbsolute(path, .{})) {
+            seance_themes_dir_len = path.len;
+            return;
+        } else |_| {}
+    }
 }
 
 /// Set GHOSTTY_RESOURCES_DIR to a wrapper directory that mirrors ghostty's
@@ -83,40 +91,43 @@ fn ensureResourcesDir() void {
 }
 
 /// Locate ghostty's resources dir and store in ghostty_orig_resources.
+///
+/// Distro packages (e.g. Arch) move share/ghostty under share/seance/ghostty
+/// to avoid file conflicts with the system ghostty package, so the
+/// seance-private location is checked first on every candidate prefix.
 fn findGhosttyResourcesDir() bool {
+    const suffixes = [_][]const u8{ "share/seance/ghostty", "share/ghostty" };
+
     var exe_buf: [std.fs.max_path_bytes]u8 = undefined;
     if (std.fs.selfExePath(&exe_buf)) |exe_path| {
         if (std.fs.path.dirname(exe_path)) |exe_dir| {
             if (std.fs.path.dirname(exe_dir)) |prefix| {
-                if (std.fmt.bufPrintZ(&ghostty_orig_resources, "{s}/share/ghostty", .{prefix})) |res_path| {
-                    const res_slice = std.mem.sliceTo(res_path, 0);
-                    var check_buf: [std.fs.max_path_bytes]u8 = undefined;
-                    const has_shell = if (std.fmt.bufPrint(&check_buf, "{s}/shell-integration", .{res_slice})) |p|
-                        (std.fs.accessAbsolute(p, .{}) != error.FileNotFound)
-                    else |_|
-                        false;
-                    if (has_shell) {
-                        ghostty_orig_resources_len = res_slice.len;
-                        return true;
-                    }
-                } else |_| {}
+                for (suffixes) |suffix| {
+                    if (tryGhosttyResourcesAt(prefix, suffix)) return true;
+                }
             }
         }
     } else |_| {}
 
-    const system_paths = [_]struct { path: []const u8, check: []const u8 }{
-        .{ .path = "/usr/share/ghostty", .check = "/usr/share/ghostty/shell-integration" },
-        .{ .path = "/usr/local/share/ghostty", .check = "/usr/local/share/ghostty/shell-integration" },
-    };
-    for (system_paths) |entry| {
-        if (std.fs.accessAbsolute(entry.check, .{})) {
-            @memcpy(ghostty_orig_resources[0..entry.path.len], entry.path);
-            ghostty_orig_resources[entry.path.len] = 0;
-            ghostty_orig_resources_len = entry.path.len;
-            return true;
-        } else |_| {}
+    const system_prefixes = [_][]const u8{ "/usr", "/usr/local" };
+    for (system_prefixes) |prefix| {
+        for (suffixes) |suffix| {
+            if (tryGhosttyResourcesAt(prefix, suffix)) return true;
+        }
     }
     return false;
+}
+
+/// If "<prefix>/<suffix>/shell-integration" exists, store "<prefix>/<suffix>"
+/// in ghostty_orig_resources and return true.
+fn tryGhosttyResourcesAt(prefix: []const u8, suffix: []const u8) bool {
+    const res_path = std.fmt.bufPrintZ(&ghostty_orig_resources, "{s}/{s}", .{ prefix, suffix }) catch return false;
+    const res_slice = std.mem.sliceTo(res_path, 0);
+    var check_buf: [std.fs.max_path_bytes]u8 = undefined;
+    const check_path = std.fmt.bufPrint(&check_buf, "{s}/shell-integration", .{res_slice}) catch return false;
+    std.fs.accessAbsolute(check_path, .{}) catch return false;
+    ghostty_orig_resources_len = res_slice.len;
+    return true;
 }
 
 /// Build a runtime wrapper directory that mirrors ghostty's resources via

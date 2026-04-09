@@ -156,6 +156,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
         .strip = strip,
+        .pic = true,
     });
     addSeanceDeps(exe_mod, b, is_linux, is_darwin, ghostty_dep);
 
@@ -163,6 +164,7 @@ pub fn build(b: *std.Build) void {
         .name = "seance",
         .root_module = exe_mod,
     });
+    exe.pie = true;
 
     b.installArtifact(exe);
 

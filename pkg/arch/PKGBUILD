@@ -2,7 +2,7 @@
 pkgname=seance
 pkgver=0.1.0
 pkgrel=1
-pkgdesc='GPU-accelerated terminal multiplexer with AI agent support'
+pkgdesc='Scrolling terminal multiplexer for running multiple AI coding agents side by side'
 arch=('x86_64')
 url='https://github.com/no1msd/seance'
 license=('MIT')
@@ -13,9 +13,16 @@ depends=(
     'libcanberra'
     'libx11'
     'wayland'
-    'mesa'
+    'libglvnd'
     'fontconfig'
+    'glib2'
+    'pango'
+    'cairo'
+    'bash'
     'hicolor-icon-theme'
+    'freetype2'
+    'harfbuzz'
+    'oniguruma'
 )
 makedepends=(
     'zig>=0.15.2'
@@ -23,36 +30,26 @@ makedepends=(
     'pkg-config'
 )
 
-# Ghostty themes tarball, pinned in build.zig.zon under .ghostty_themes.
-# Bump together with the .zon entry on each release that updates it.
-_themes_file='ghostty-themes-release-20260216-151611-fc73ce3.tgz'
-
 source=(
     "$pkgname-$pkgver-src.tar.gz::$url/releases/download/v$pkgver/$pkgname-$pkgver-src.tar.gz"
-    "https://deps.files.ghostty.org/$_themes_file"
 )
-# Don't let makepkg extract the themes tarball; `zig fetch` consumes it
-# in prepare() and stores it in the package cache by multihash.
-noextract=("$_themes_file")
 sha256sums=(
-    'SKIP'  # TODO: replace with the v0.1.0 source tarball sha256 once published
-    '14200bb86a0c814ab69609d500b280b396b6d2eb835edf0676de4a789c0aa8fd'
+    'aa0b1392edfe4b88c0c9a4918a0872528735dc995deda18d48f20b9df7fd5ac2'
 )
 
 prepare() {
-    # Pre-populate Zig's package cache with the themes tarball so the
-    # build needs no network access. `zig fetch` against a local file
-    # extracts and stores it under its multihash, matching the entry
-    # in build.zig.zon, so b.lazyDependency() finds it offline.
-    export ZIG_GLOBAL_CACHE_DIR="$srcdir/.zig-cache"
     cd "$pkgname-$pkgver"
-    zig fetch --save=false "$srcdir/$_themes_file"
+    ZIG_GLOBAL_CACHE_DIR="$srcdir/zig-cache" \
+        ./ghostty/nix/build-support/fetch-zig-cache.sh
 }
 
 build() {
-    export ZIG_GLOBAL_CACHE_DIR="$srcdir/.zig-cache"
     cd "$pkgname-$pkgver"
-    zig build -p "$srcdir/out" -Doptimize=ReleaseSafe -Dstrip=true
+    ZIG_GLOBAL_CACHE_DIR="$srcdir/zig-cache" zig build \
+        -p "$srcdir/out" \
+        --system "$srcdir/zig-cache/p" \
+        -Doptimize=ReleaseSafe \
+        -Dstrip=true
 }
 
 package() {
@@ -60,4 +57,9 @@ package() {
     cp -r "$srcdir/out"/* "$pkgdir/usr/"
     install -Dm644 "$pkgname-$pkgver/LICENSE" \
         "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+
+    # Avoid file conflicts with ghostty and ncurses packages.
+    install -d "$pkgdir/usr/share/seance"
+    mv "$pkgdir/usr/share/ghostty" "$pkgdir/usr/share/seance/ghostty"
+    mv "$pkgdir/usr/share/terminfo" "$pkgdir/usr/share/seance/terminfo"
 }
