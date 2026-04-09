@@ -1,0 +1,128 @@
+#!/usr/bin/env bash
+# seance Pi Agent wrapper — intercepts `pi` invocations inside seance
+# terminals and injects lifecycle hooks so seance can track session state.
+set -euo pipefail
+
+# ── Find the real pi binary, skipping our own directory ───────────────────
+
+WRAPPER_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REAL_PI=""
+IFS=: read -ra PATH_DIRS <<< "$PATH"
+for dir in "${PATH_DIRS[@]}"; do
+    [[ -z "$dir" ]] && continue
+    resolved="$(cd "$dir" 2>/dev/null && pwd)" || continue
+    [[ "$resolved" == "$WRAPPER_DIR" ]] && continue
+    if [[ -x "$dir/pi" ]]; then
+        REAL_PI="$dir/pi"
+        break
+    fi
+done
+
+if [[ -z "$REAL_PI" ]]; then
+    echo "pi: command not found" >&2
+    exit 127
+fi
+
+# ── Pass-through conditions ──────────────────────────────────────────────
+
+# Not inside seance
+if [[ -z "${SEANCE_SURFACE_ID:-}" ]]; then
+    exec "$REAL_PI" "$@"
+fi
+
+# Hooks explicitly disabled
+if [[ "${SEANCE_PI_HOOKS_DISABLED:-}" == "1" ]]; then
+    exec "$REAL_PI" "$@"
+fi
+
+# Socket health check (0.75s timeout)
+if ! timeout 0.75 seance ctl --socket "${SEANCE_SOCKET_PATH:-}" ping >/dev/null 2>&1; then
+    exec "$REAL_PI" "$@"
+fi
+
+# ── Pass-through subcommands ─────────────────────────────────────────────
+
+case "${1:-}" in
+    install|remove|list|update|config)
+        exec "$REAL_PI" "$@"
+        ;;
+esac
+
+# ── Create per-session directory with seance extension ───────────────────
+
+SESSION_DIR="$HOME/.cache/seance-pi/$SEANCE_SURFACE_ID"
+rm -rf "$SESSION_DIR"
+mkdir -p "$SESSION_DIR"
+
+cat > "$SESSION_DIR/seance-hook.js" <<'EXTEOF'
+const { execSync } = require("child_process");
+
+const ctl = (hook, payload) => {
+  try {
+    execSync("seance ctl pi-hook " + hook, {
+      input: JSON.stringify(payload),
+      timeout: 10000,
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+  } catch {}
+};
+
+module.exports = function (pi) {
+  pi.on("session_start", async () => {
+    ctl("session-start", { cwd: process.cwd() });
+  });
+
+  pi.on("input", async () => {
+    ctl("prompt-submit", {});
+  });
+
+  pi.on("tool_call", async (event) => {
+    ctl("pre-tool-use", {
+      tool_name: event.toolName,
+      input: event.input,
+    });
+  });
+
+  pi.on("tool_result", async () => {
+    ctl("post-tool-use", {});
+  });
+
+  pi.on("agent_end", async (event) => {
+    let lastMsg = "";
+    const msgs = Array.isArray(event.messages) ? event.messages : [];
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      if (msgs[i].role === "assistant") {
+        lastMsg = (msgs[i].content || [])
+          .filter((b) => b.type === "text")
+          .map((b) => b.text)
+          .join("");
+        break;
+      }
+    }
+    ctl("stop", {
+      cwd: process.cwd(),
+      last_assistant_message: lastMsg,
+    });
+  });
+
+  pi.on("session_shutdown", async () => {
+    ctl("session-end", {});
+  });
+};
+EXTEOF
+
+export SEANCE_PI_SESSION_DIR="$SESSION_DIR"
+export SEANCE_PI_PID=$$
+
+# ── Launch pi (no exec — wrapper must survive for cleanup) ───────────────
+
+"$REAL_PI" --extension "$SESSION_DIR/seance-hook.js" "$@"
+rc=$?
+
+# ── Session-end cleanup ─────────────────────────────────────────────────
+# Pi may not fire session_shutdown, so we always run it from the wrapper.
+
+seance ctl pi-hook session-end <<< "{}" 2>/dev/null || true
+rm -rf "$SESSION_DIR"
+
+exit $rc

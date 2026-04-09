@@ -38,6 +38,7 @@ const Widgets = struct {
     cursor_blink: ?*c.GtkWidget = null,
     claude_code_hooks: ?*c.GtkWidget = null,
     codex_hooks: ?*c.GtkWidget = null,
+    pi_hooks: ?*c.GtkWidget = null,
 
     // Combos
     notification_sound: ?*c.GtkWidget = null,
@@ -433,6 +434,7 @@ fn buildIntegrationsSection(page: *c.GtkWidget, cfg: *const config_mod.Config) v
     c.adw_preferences_group_set_description(@as(*c.AdwPreferencesGroup, @ptrCast(g2)), "When enabled, seance wraps the claude command to inject session tracking and notification hooks.");
     w.claude_code_hooks = addSwitchRow(g2, "Claude Code Integration", if (cfg.claude_code_hooks) "Sidebar shows Claude session status and notifications." else "Claude Code runs without seance integration.", cfg.claude_code_hooks);
     w.codex_hooks = addSwitchRow(g2, "Codex Integration", if (cfg.codex_hooks) "Sidebar shows Codex session status and notifications." else "Codex runs without seance integration.", cfg.codex_hooks);
+    w.pi_hooks = addSwitchRow(g2, "Pi Agent Integration", if (cfg.pi_hooks) "Sidebar shows Pi session status and notifications." else "Pi runs without seance integration.", cfg.pi_hooks);
     addToPage(page, g2);
 
     // Card 3: Port Configuration
@@ -680,6 +682,8 @@ fn onSwitchChanged(obj: *c.GObject, _: *c.GParamSpec, _: c.gpointer) callconv(.c
         cfg.claude_code_hooks = active;
     } else if (widget == w.codex_hooks) {
         cfg.codex_hooks = active;
+    } else if (widget == w.pi_hooks) {
+        cfg.pi_hooks = active;
     } else return;
 
     saveAndReload();

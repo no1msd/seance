@@ -142,6 +142,7 @@ fn dispatch(ctx: Ctx, command: []const u8) u8 {
     if (eql(command, "last-pane")) return cmdLastPane(ctx);
     if (eql(command, "claude-hook")) return cmdClaudeHook(ctx);
     if (eql(command, "codex-hook")) return cmdCodexHook(ctx);
+    if (eql(command, "pi-hook")) return cmdPiHook(ctx);
     if (eql(command, "help") or eql(command, "--help") or eql(command, "-h")) {
         printUsage();
         return 0;
@@ -1208,12 +1209,30 @@ const codex_agent = AgentConfig{
     .session_dir_env = "SEANCE_CODEX_SESSION_DIR",
 };
 
+const pi_agent = AgentConfig{
+    .name = "Pi",
+    .display_name = "Pi Agent",
+    .usage = "usage: pi-hook <session-start|session-end|prompt-submit|pre-tool-use|post-tool-use|stop>\n",
+    .pid_env = "SEANCE_PI_PID",
+    .response = "OK\n",
+    .status_key_prefix = "pi",
+    .status_key_mode = .surface,
+    .has_ask_user_handling = false,
+    .has_notification_hook = false,
+    .has_post_tool_hook = true,
+    .session_dir_env = "SEANCE_PI_SESSION_DIR",
+};
+
 fn cmdClaudeHook(ctx: Ctx) u8 {
     return cmdAgentHook(ctx, claude_agent);
 }
 
 fn cmdCodexHook(ctx: Ctx) u8 {
     return cmdAgentHook(ctx, codex_agent);
+}
+
+fn cmdPiHook(ctx: Ctx) u8 {
+    return cmdAgentHook(ctx, pi_agent);
 }
 
 const HookCtx = struct {

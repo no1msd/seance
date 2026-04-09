@@ -59,6 +59,9 @@ pub const Config = struct {
     // Codex CLI integration
     codex_hooks: bool = true,
 
+    // Pi Agent integration
+    pi_hooks: bool = true,
+
     // Notifications
     notification_sound: NotificationSound = .default,
 
@@ -263,6 +266,7 @@ pub fn saveConfig(cfg: *const Config) void {
     writeBool(w, "confirm-close-window", cfg.confirm_close_window) catch return;
     writeBool(w, "claude-code-hooks", cfg.claude_code_hooks) catch return;
     writeBool(w, "codex-hooks", cfg.codex_hooks) catch return;
+    writeBool(w, "pi-hooks", cfg.pi_hooks) catch return;
 
     // [notifications]
     w.print("\n[notifications]\n", .{}) catch return;
@@ -442,6 +446,8 @@ fn applyValue(config: *Config, section: []const u8, key: []const u8, raw_val: []
             config.claude_code_hooks = parseBool(val) orelse config.claude_code_hooks; return true;
         } else if (eql(key, "codex-hooks")) {
             config.codex_hooks = parseBool(val) orelse config.codex_hooks; return true;
+        } else if (eql(key, "pi-hooks")) {
+            config.pi_hooks = parseBool(val) orelse config.pi_hooks; return true;
         }
     } else if (eql(section, "notifications")) {
         if (eql(key, "sound")) {
