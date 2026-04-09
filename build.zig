@@ -92,6 +92,16 @@ fn addSeanceDeps(
     mod.linkLibrary(ghostty_dep.artifact("ghostty_static"));
     mod.addIncludePath(ghostty_dep.path("include"));
 
+    // System libraries used internally by libghostty. When ghostty is
+    // built as a static library with --system (system integration),
+    // these are not embedded in the archive so the consumer must link
+    // them explicitly.
+    if (is_linux) {
+        mod.linkSystemLibrary("freetype2", sys_lib);
+        mod.linkSystemLibrary("harfbuzz", sys_lib);
+        mod.linkSystemLibrary("oniguruma", sys_lib);
+    }
+
     // GLAD (OpenGL loader) — ghostty only compiles this for exe builds,
     // so we must compile it ourselves when linking libghostty as a library.
     mod.addIncludePath(ghostty_dep.path("vendor/glad/include"));
