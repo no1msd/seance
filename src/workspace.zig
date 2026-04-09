@@ -222,6 +222,9 @@ pub const Workspace = struct {
 
     // Suppress transient onFocusEnter during restructuring
     restructuring: bool = false,
+    // Deferred page disposal (tabbed→stacked expel) can unparent then
+    // re-attach a widget in layoutStackedGroup, dropping GTK focus.
+    pending_focus_regrab: bool = false,
 
     // Resize handles: transparent overlay widgets at column/row dividers
     col_handles: [max_col_handles]ResizeHandle = undefined,
@@ -630,6 +633,9 @@ pub const Workspace = struct {
                 if (actual_parent == null) {
                     c.gtk_fixed_put(@ptrCast(self.fixed), pw, 0, 0);
                     _ = c.g_object_unref(@ptrCast(pw));
+                    if (ctx.col_idx == self.focused_column and i == grp.active_panel) {
+                        self.pending_focus_regrab = true;
+                    }
                 } else {
                     continue;
                 }
@@ -815,7 +821,8 @@ pub const Workspace = struct {
         }
 
         // Advance column animations
-        for (self.columns.items) |*col| {
+        var needs_focus_regrab = false;
+        for (self.columns.items, 0..) |*col, col_i| {
             if (col.closing) {
                 col.open_anim *= (1.0 - anim_lerp_factor);
                 if (col.open_anim <= 1.0 - anim_snap_threshold) col.open_anim = 0.0;
@@ -843,7 +850,10 @@ pub const Workspace = struct {
                 .stacked => {
                     if (col.stacked_anim < 1.0) {
                         col.stacked_anim += (1.0 - col.stacked_anim) * anim_lerp_factor;
-                        if (col.stacked_anim >= anim_snap_threshold) col.stacked_anim = 1.0;
+                        if (col.stacked_anim >= anim_snap_threshold) {
+                            col.stacked_anim = 1.0;
+                            if (col_i == self.focused_column) needs_focus_regrab = true;
+                        }
                         needs_layout = true;
                     }
                 },
@@ -858,6 +868,7 @@ pub const Workspace = struct {
                             for (col.groups.items) |grp| {
                                 grp.exitStackedMode();
                             }
+                            if (col_i == self.focused_column) needs_focus_regrab = true;
                         }
                     }
                 },
@@ -924,6 +935,12 @@ pub const Workspace = struct {
             }
         }
 
+        // Re-grab keyboard focus after layout mode transition completes
+        // (reparenting panels drops GTK focus in both directions).
+        if (needs_focus_regrab) {
+            if (self.focusedGroup()) |grp| grp.focus();
+        }
+
         // Animate camera panning
         {
             const diff = self.camera_target - self.camera;
@@ -953,6 +970,12 @@ pub const Workspace = struct {
         }
 
         if (needs_layout) self.applyLayout();
+
+        if (self.pending_focus_regrab) {
+            self.pending_focus_regrab = false;
+            if (self.focusedGroup()) |grp| grp.focus();
+        }
+
         return 1; // G_SOURCE_CONTINUE
     }
 
@@ -1601,6 +1624,14 @@ pub const Workspace = struct {
         }
 
         self.applyLayout();
+
+        // Only regrab focus for stacked→tabbed; in the other direction
+        // deferred page disposal races with gtk_widget_grab_focus,
+        // so onTick handles it after disposal completes.
+        if (col.layout_mode == .tabbed) {
+            self.restructuring = false;
+            grp.focus();
+        }
     }
 
     // ── Pane operations ─────────────────────────────────────────────
