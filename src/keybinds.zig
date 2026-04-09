@@ -584,10 +584,16 @@ pub fn executeAction(action: Action, state: *Window.WindowState) c.gboolean {
 
         // Move column
         .move_column_left => {
-            if (state.activeWorkspace()) |ws| ws.moveColumn(.left);
+            if (state.activeWorkspace()) |ws| {
+                ws.moveColumn(.left);
+                state.sidebar.refresh();
+            }
         },
         .move_column_right => {
-            if (state.activeWorkspace()) |ws| ws.moveColumn(.right);
+            if (state.activeWorkspace()) |ws| {
+                ws.moveColumn(.right);
+                state.sidebar.refresh();
+            }
         },
 
         // Expel
