@@ -669,7 +669,7 @@ fn restoreWorkspaceColumns(state: *WindowState, obj: std.json.ObjectMap, layout_
         break :blk getFirstCwdFromGroupObj(grp_obj);
     };
 
-    var cwd_buf: [513]u8 = undefined;
+    var cwd_buf: [Pane.cwd_cap + 1]u8 = undefined;
     const cwd_z: ?[*:0]const u8 = if (first_cwd) |cwd_s| cwdblk: {
         const len = @min(cwd_s.len, cwd_buf.len - 1);
         @memcpy(cwd_buf[0..len], cwd_s[0..len]);
@@ -751,7 +751,7 @@ fn restoreWorkspaceColumns(state: *WindowState, obj: std.json.ObjectMap, layout_
             else => continue,
         };
         const grp_cwd = getFirstCwdFromGroupObj(grp_obj);
-        var grp_cwd_buf: [513]u8 = undefined;
+        var grp_cwd_buf: [Pane.cwd_cap + 1]u8 = undefined;
         const grp_cwd_z: ?[*:0]const u8 = if (grp_cwd) |s| grpblk: {
             const grplen = @min(s.len, grp_cwd_buf.len - 1);
             @memcpy(grp_cwd_buf[0..grplen], s[0..grplen]);

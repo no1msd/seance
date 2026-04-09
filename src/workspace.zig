@@ -1610,8 +1610,14 @@ pub const Workspace = struct {
         self.restructuring = true;
         defer self.restructuring = false;
 
+        // Inherit the focused pane's CWD so the new shell starts there.
+        var cwd_buf: [Pane.cwd_cap + 1]u8 = undefined;
+        const cwd_z: ?[*:0]const u8 = if (self.focusedGroup()) |grp|
+            if (grp.focusedTerminalPane()) |pane| pane.cwdZ(&cwd_buf) else null
+        else null;
+
         if (self.focusedGroup()) |old_grp| old_grp.unfocus();
-        const grp = try self.addColumn(null);
+        const grp = try self.addColumn(cwd_z);
         grp.focus();
     }
 
@@ -2098,7 +2104,14 @@ pub const Workspace = struct {
 
     pub fn newTabInFocusedGroup(self: *Workspace) !void {
         const group = self.focusedGroup() orelse return error.NoFocusedGroup;
-        _ = try group.newPanel(null);
+
+        // Inherit the focused pane's CWD.
+        var cwd_buf: [Pane.cwd_cap + 1]u8 = undefined;
+        const cwd_z: ?[*:0]const u8 = if (group.focusedTerminalPane()) |pane|
+            pane.cwdZ(&cwd_buf)
+        else null;
+
+        _ = try group.newPanel(cwd_z);
         // Trigger layout update for stacked mode
         self.applyLayout();
         // Re-grab keyboard focus after layout (applyLayout may hide then

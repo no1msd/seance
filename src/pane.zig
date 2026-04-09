@@ -6,13 +6,15 @@ const ghostty_bridge = @import("ghostty_bridge.zig");
 const opengl = @import("gl.zig");
 
 pub const Pane = struct {
+    pub const cwd_cap = 512;
+
     id: u64,
     workspace_id: u64,
     pane_group_id: u64,
     surface: c.ghostty_surface_t = null,
     gl_area: ?*c.GtkGLArea = null,
     widget: *c.GtkWidget, // outer wrapper box (for CSS border)
-    cwd: [512]u8 = [_]u8{0} ** 512,
+    cwd: [cwd_cap]u8 = [_]u8{0} ** cwd_cap,
     cwd_len: usize = 0,
     has_unread: bool = false,
 
@@ -206,6 +208,14 @@ pub const Pane = struct {
     pub fn getCwd(self: *Pane) ?[]const u8 {
         if (self.cwd_len > 0) return self.cwd[0..self.cwd_len];
         return null;
+    }
+
+    /// Copy the pane's CWD into `buf` as a null-terminated string.
+    pub fn cwdZ(self: *const Pane, buf: *[cwd_cap + 1]u8) ?[*:0]const u8 {
+        if (self.cwd_len == 0) return null;
+        @memcpy(buf[0..self.cwd_len], self.cwd[0..self.cwd_len]);
+        buf[self.cwd_len] = 0;
+        return @ptrCast(buf);
     }
 
     pub fn focus(self: *Pane) void {
@@ -610,13 +620,8 @@ fn initSurface(pane: *Pane, width: u32, height: u32) void {
     // Build environment variables
     const cfg = config_mod.get();
 
-    var cwd_buf: [513]u8 = undefined;
-    var cwd_z: ?[*:0]const u8 = null;
-    if (pane.cwd_len > 0) {
-        @memcpy(cwd_buf[0..pane.cwd_len], pane.cwd[0..pane.cwd_len]);
-        cwd_buf[pane.cwd_len] = 0;
-        cwd_z = @ptrCast(&cwd_buf);
-    }
+    var cwd_buf: [Pane.cwd_cap + 1]u8 = undefined;
+    const cwd_z = pane.cwdZ(&cwd_buf);
 
     // Environment variables for shell integration
     var ws_buf: [64]u8 = undefined;
