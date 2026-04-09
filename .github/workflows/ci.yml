@@ -31,6 +31,7 @@ jobs:
             libegl-dev \
             libgl-dev \
             libfontconfig-dev \
+            libonig-dev \
             xvfb
 
       - name: Build

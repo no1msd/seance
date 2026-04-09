@@ -72,6 +72,7 @@ jobs:
             libegl-dev \
             libgl-dev \
             libfontconfig-dev \
+            libonig-dev \
             ncurses-bin \
             librsvg2-common \
             libgdk-pixbuf2.0-bin \
