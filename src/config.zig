@@ -26,6 +26,7 @@ pub const Config = struct {
     theme: [64]u8 = [_]u8{0} ** 64,
     theme_len: usize = 0,
     background_opacity: f64 = 1.0,
+    dim_unfocused_panes: bool = true,
 
     // Window
     window_padding_x: ?u32 = null,
@@ -234,6 +235,7 @@ pub fn saveConfig(cfg: *const Config) void {
     w.print("background-opacity = ", .{}) catch return;
     writeFloat(w, cfg.background_opacity) catch return;
     w.print("\n", .{}) catch return;
+    writeBool(w, "dim-unfocused-panes", cfg.dim_unfocused_panes) catch return;
 
     // [window]
     w.print("\n[window]\n", .{}) catch return;
@@ -384,6 +386,8 @@ fn applyValue(config: *Config, section: []const u8, key: []const u8, raw_val: []
             setStr(&config.theme, &config.theme_len, val); return true;
         } else if (eql(key, "background-opacity")) {
             config.background_opacity = parseFloat(val) orelse config.background_opacity; return true;
+        } else if (eql(key, "dim-unfocused-panes")) {
+            config.dim_unfocused_panes = parseBool(val) orelse config.dim_unfocused_panes; return true;
         }
     } else if (eql(section, "window")) {
         if (eql(key, "padding-x")) {

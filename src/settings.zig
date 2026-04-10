@@ -36,6 +36,7 @@ const Widgets = struct {
     show_branch: ?*c.GtkWidget = null,
     show_ports: ?*c.GtkWidget = null,
     cursor_blink: ?*c.GtkWidget = null,
+    dim_unfocused_panes: ?*c.GtkWidget = null,
     claude_code_hooks: ?*c.GtkWidget = null,
     codex_hooks: ?*c.GtkWidget = null,
     pi_hooks: ?*c.GtkWidget = null,
@@ -216,6 +217,7 @@ fn buildAppearanceSection(page: *c.GtkWidget, cfg: *const config_mod.Config) voi
         .underline => 2,
     });
     w.cursor_blink = addSwitchRow(g1, "Cursor Blink", "Animate the terminal cursor.", cfg.cursor_blink);
+    w.dim_unfocused_panes = addSwitchRow(g1, "Dim Unfocused Panes", "Reduce opacity of unfocused terminal panes.", cfg.dim_unfocused_panes);
     addToPage(page, g1);
 }
 
@@ -678,6 +680,8 @@ fn onSwitchChanged(obj: *c.GObject, _: *c.GParamSpec, _: c.gpointer) callconv(.c
         cfg.sidebar_show_ports = active;
     } else if (widget == w.cursor_blink) {
         cfg.cursor_blink = active;
+    } else if (widget == w.dim_unfocused_panes) {
+        cfg.dim_unfocused_panes = active;
     } else if (widget == w.claude_code_hooks) {
         cfg.claude_code_hooks = active;
     } else if (widget == w.codex_hooks) {

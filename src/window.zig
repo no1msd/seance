@@ -2194,13 +2194,23 @@ fn loadThemeCss() void {
         \\.sidebar-row-drag-over {{ background: alpha({s}, 0.15); border-top: 2px solid alpha({s}, 0.6); }}
         \\.pane-focused {{ outline: 2px solid transparent; outline-offset: -2px; background-color: {s}; }}
         \\.pane-unfocused {{ outline: 2px solid transparent; outline-offset: -2px; background-color: {s}; }}
-        \\.pane-unfocused > * {{ opacity: 0.80; }}
+        \\
+    , .{ accent, accent, pane_bg, pane_bg }) catch return;
+
+    if (cfg.dim_unfocused_panes) {
+        w.print(
+            \\.pane-unfocused > * {{ filter: brightness(0.8); }}
+            \\
+        , .{}) catch return;
+    }
+
+    w.print(
         \\.pane-focus-bar {{ background: mix({s}, {s}, 0.5); opacity: 0; transition: opacity 100ms ease-in-out; }}
         \\.multi-pane .pane-focused .pane-focus-bar {{ opacity: 1; }}
         \\.pane-notification {{ outline: 2px solid {s}; outline-offset: -2px; background-color: {s}; }}
         \\.pane-drop-target {{ outline: 2px dashed alpha({s}, 0.6); outline-offset: -2px; background-color: {s}; }}
         \\
-    , .{ accent, accent, pane_bg, pane_bg, pane_bg, accent, notify, pane_bg, notify, pane_bg }) catch return;
+    , .{ pane_bg, accent, notify, pane_bg, notify, pane_bg }) catch return;
 
     w.print(
         \\.sidebar-badge {{ background-color: {s}; color: {s}; border-radius: 50%; min-width: 18px; min-height: 18px; font-size: 9px; font-weight: 600; padding: 0; }}
