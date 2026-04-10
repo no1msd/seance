@@ -5,8 +5,7 @@
 <h1 align="center">Séance</h1>
 
 <p align="center">
-  A scrolling terminal multiplexer for running multiple AI coding agents side by side<br>
-  without losing track of any of them.
+  A scrolling terminal multiplexer that tracks your AI coding agents.
 </p>
 
 <p align="center">
@@ -19,7 +18,7 @@
 
 Running multiple AI coding agents at once means constantly checking which one finished, which one is stuck waiting for permission, and which one needs your attention.
 
-Séance automatically injects hooks into [Claude Code](https://docs.anthropic.com/en/docs/claude-code) and [Codex](https://github.com/openai/codex) sessions with zero configuration so it can track what each one is doing. Agent status (working, waiting for permission, idle) is shown in the sidebar in real time, and events like permission requests or task completions are delivered as desktop notifications with unread tracking.
+Séance automatically injects hooks into [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [Codex](https://github.com/openai/codex), and [Pi](https://github.com/badlogic/pi-mono) sessions with zero configuration so it can track what each one is doing. Agent status (working, waiting for permission, idle) is shown in the sidebar in real time, and events like permission requests or task completions are delivered as desktop notifications with unread tracking.
 
 ### Scrolling layout
 
