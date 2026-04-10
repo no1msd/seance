@@ -2151,7 +2151,7 @@ fn loadThemeCss() void {
     // actually picks up the theme color. PRIORITY_APPLICATION beats the
     // libadwaita rule regardless of specificity.
     w.print(
-        \\toolbarview > .top-bar headerbar {{ background-color: alpha(@headerbar_bg_color, {d:.3}); }}
+        \\toolbarview > .top-bar headerbar {{ background-color: alpha(@headerbar_bg_color, {d:.3}); color: @headerbar_fg_color; }}
         \\
     , .{cfg.background_opacity}) catch return;
 
