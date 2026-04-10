@@ -1,6 +1,6 @@
 # Maintainer: Dániel Sipka <no1msd@users.noreply.github.com>
 pkgname=seance
-pkgver=0.1.1
+pkgver=0.1.2
 pkgrel=1
 pkgdesc='Scrolling terminal multiplexer for running multiple AI coding agents side by side'
 arch=('x86_64')
