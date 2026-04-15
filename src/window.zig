@@ -1311,6 +1311,9 @@ fn applyConfigToPane(pane: *@import("pane.zig").Pane, config: *anyopaque) void {
     const surface = pane.surface orelse return;
     c.ghostty_surface_update_config(surface, config);
     pane.queueRedraw();
+    // Renderer applies config asynchronously; deferred redraw
+    // ensures we re-render after it catches up.
+    pane.queueDeferredRedraw();
 }
 
 fn onFolderChosen(dialog: *c.GtkDialog, response_id: c_int, data: c.gpointer) callconv(.c) void {
@@ -2346,6 +2349,11 @@ fn onSystemDarkChanged(_: *c.GObject, _: *c.GParamSpec, _: c.gpointer) callconv(
 /// and regenerate the UI CSS. Used both on system dark/light changes and
 /// at startup after session restore.
 pub fn reloadTheme() void {
+    // set_color_scheme can synchronously re-enter via onSystemDarkChanged.
+    if (reloading_theme) return;
+    reloading_theme = true;
+    defer reloading_theme = false;
+
     const theme_mod = @import("theme.zig");
     const ghostty_bridge = @import("ghostty_bridge.zig");
     const cfg = config_mod.get();
@@ -2388,6 +2396,8 @@ pub fn reloadTheme() void {
 
     loadThemeCss();
 }
+
+var reloading_theme: bool = false;
 
 /// Connect to AdwStyleManager's notify::dark signal to track system dark/light changes.
 /// Must be called once during app startup.
