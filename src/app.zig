@@ -64,7 +64,7 @@ fn onActivate(app: *c.AdwApplication) callconv(.c) void {
         // Set libadwaita to follow system dark/light, preferring dark when
         // the system has no opinion (or on non-Linux platforms).
         const style_manager = c.adw_style_manager_get_default();
-        c.adw_style_manager_set_color_scheme(style_manager, c.ADW_COLOR_SCHEME_PREFER_DARK);
+        c.adw_style_manager_set_color_scheme(style_manager, c.ADW_COLOR_SCHEME_DEFAULT);
 
         // Initialize ghostty terminal engine
         if (!ghostty_bridge.init()) {

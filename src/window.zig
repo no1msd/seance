@@ -2093,7 +2093,7 @@ fn loadThemeCss() void {
     // force based on the terminal background luminance.
     const style_manager = c.adw_style_manager_get_default();
     if (config_mod.get().theme_len == 0) {
-        c.adw_style_manager_set_color_scheme(style_manager, c.ADW_COLOR_SCHEME_PREFER_DARK);
+        c.adw_style_manager_set_color_scheme(style_manager, c.ADW_COLOR_SCHEME_DEFAULT);
     } else {
         if (colors.is_light)
             c.adw_style_manager_set_color_scheme(style_manager, c.ADW_COLOR_SCHEME_FORCE_LIGHT)
@@ -2355,7 +2355,7 @@ pub fn reloadTheme() void {
     // resolveDefaultThemeName() sees the actual system preference.
     if (cfg.theme_len == 0) {
         const style_manager = c.adw_style_manager_get_default();
-        c.adw_style_manager_set_color_scheme(style_manager, c.ADW_COLOR_SCHEME_PREFER_DARK);
+        c.adw_style_manager_set_color_scheme(style_manager, c.ADW_COLOR_SCHEME_DEFAULT);
     }
 
     // Build one ghostty config for color queries and all surface updates.
