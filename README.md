@@ -11,6 +11,7 @@
 <p align="center">
   <a href="https://github.com/no1msd/seance/releases"><img src="https://img.shields.io/github/v/release/no1msd/seance?color=50c6f7&label=release" alt="Latest release"></a>
   <a href="https://aur.archlinux.org/packages/seance"><img src="https://img.shields.io/aur/version/seance?color=50c6f7&label=AUR" alt="AUR version"></a>
+  <a href="https://github.com/no1msd/seance/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/no1msd/seance/ci.yml?branch=main&color=50c6f7&label=CI" alt="CI status"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/no1msd/seance?color=50c6f7" alt="MIT License"></a>
   <a href="https://no1msd.github.io/seance"><img src="https://img.shields.io/badge/site-no1msd.github.io%2Fseance-50c6f7" alt="Website"></a>
 </p>
