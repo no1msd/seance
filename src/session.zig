@@ -548,14 +548,17 @@ fn restoreFromJsonAll(wm: anytype, root: std.json.Value) bool {
         wm.windows.append(wm.allocator, state) catch continue;
         wm.active_window = state;
 
-        // Restore window dimensions
+        // Restore window dimensions. Ignore corrupt values so a bad session
+        // file doesn't crash startup via an out-of-range @intCast.
         if (jsonInt(win_obj, "width")) |w| {
             if (jsonInt(win_obj, "height")) |h| {
-                c.gtk_window_set_default_size(
-                    @as(*c.GtkWindow, @ptrCast(state.gtk_window)),
-                    @intCast(w),
-                    @intCast(h),
-                );
+                if (w > 0 and h > 0 and w <= 16384 and h <= 16384) {
+                    c.gtk_window_set_default_size(
+                        @as(*c.GtkWindow, @ptrCast(state.gtk_window)),
+                        @intCast(w),
+                        @intCast(h),
+                    );
+                }
             }
         }
 
@@ -602,11 +605,12 @@ fn restoreWindowContent(state: *WindowState, obj: std.json.ObjectMap) bool {
 
     if (restored_count == 0) return false;
 
-    // Compute next_port_ordinal from saved values.
+    // Compute next_port_ordinal from saved values. Saturating add so a
+    // u32-max ordinal in the session file doesn't overflow here.
     var max_ord: u32 = 0;
     for (state.workspaces.items) |ws| {
         if (ws.port_ordinal >= max_ord) {
-            max_ord = ws.port_ordinal + 1;
+            max_ord = ws.port_ordinal +| 1;
         }
     }
     state.next_port_ordinal = max_ord;
@@ -615,8 +619,11 @@ fn restoreWindowContent(state: *WindowState, obj: std.json.ObjectMap) bool {
     c.gtk_revealer_set_reveal_child(state.sidebar_revealer, if (state.sidebar_visible) 1 else 0);
 
     // Select active workspace
-    const active_idx = @as(usize, @intCast(jsonInt(obj, "active_workspace") orelse 0));
-    const clamped = @min(active_idx, state.workspaces.items.len - 1);
+    const active_idx = jsonIndex(obj, "active_workspace");
+    const clamped = if (state.workspaces.items.len > 0)
+        @min(active_idx, state.workspaces.items.len - 1)
+    else
+        0;
     state.selectWorkspace(clamped);
 
     state.sidebar.refresh();
@@ -782,7 +789,7 @@ fn restoreWorkspaceColumns(state: *WindowState, obj: std.json.ObjectMap, layout_
     }
 
     // Restore focused column
-    const focused = @as(usize, @intCast(jsonInt(layout_obj, "focused_column") orelse 0));
+    const focused = jsonIndex(layout_obj, "focused_column");
     ws.focused_column = @min(focused, if (ws.columns.items.len > 0) ws.columns.items.len - 1 else 0);
 
     // Restore camera position
@@ -846,7 +853,7 @@ fn restoreGroupPanels(group: *PaneGroup, obj: std.json.ObjectMap) void {
     }
 
     // Restore active panel
-    const active = @as(usize, @intCast(jsonInt(obj, "active_panel") orelse 0));
+    const active = jsonIndex(obj, "active_panel");
     group.switchToPanel(@min(active, if (group.panels.items.len > 0) group.panels.items.len - 1 else 0));
 }
 
@@ -858,7 +865,8 @@ fn applyWorkspaceMetadata(ws: *Workspace, obj: std.json.ObjectMap) void {
         if (p) ws.is_pinned = true;
     }
     if (jsonInt(obj, "port_ordinal")) |ord| {
-        ws.port_ordinal = @intCast(@max(0, ord));
+        const clamped = @min(@max(@as(i64, 0), ord), @as(i64, std.math.maxInt(u32)));
+        ws.port_ordinal = @intCast(clamped);
     }
 }
 
@@ -915,6 +923,14 @@ fn jsonInt(obj: std.json.ObjectMap, key: []const u8) ?i64 {
         .integer => |i| i,
         else => null,
     };
+}
+
+/// Read a non-negative list index from JSON. Negative or missing values yield 0;
+/// values larger than i32 max are capped. Callers still clamp against list length.
+fn jsonIndex(obj: std.json.ObjectMap, key: []const u8) usize {
+    const v = jsonInt(obj, key) orelse return 0;
+    if (v < 0) return 0;
+    return @intCast(@min(v, @as(i64, std.math.maxInt(i32))));
 }
 
 fn jsonBool(obj: std.json.ObjectMap, key: []const u8) ?bool {
