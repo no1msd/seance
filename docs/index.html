@@ -3,17 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Séance — terminal multiplexer for AI coding agents</title>
+<title>Séance: terminal multiplexer for AI coding agents</title>
 <meta name="description" content="A Linux terminal multiplexer that tracks parallel AI coding agents. Auto-detects Claude Code, Codex, and Pi sessions. Scrolling pane layout, GPU-accelerated, scriptable over a Unix socket.">
 <link rel="icon" type="image/svg+xml" href="logo.svg">
 
-<meta property="og:title" content="Séance — terminal multiplexer for AI coding agents">
+<meta property="og:title" content="Séance: terminal multiplexer for AI coding agents">
 <meta property="og:description" content="Run 10 Claude Code sessions in parallel without losing track of which one needs you. Linux-native, scrolling layout, GPU-accelerated.">
 <meta property="og:image" content="https://no1msd.github.io/seance/og.png">
 <meta property="og:url" content="https://no1msd.github.io/seance">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Séance — terminal multiplexer for AI coding agents">
+<meta name="twitter:title" content="Séance: terminal multiplexer for AI coding agents">
 <meta name="twitter:description" content="Run 10 Claude Code sessions in parallel without losing track of which one needs you.">
 <meta name="twitter:image" content="https://no1msd.github.io/seance/og.png">
 
@@ -130,13 +130,15 @@
   }
   .btn.primary:hover { background: linear-gradient(180deg, #8adcf9, var(--accent)); }
 
-  /* Demo frame */
+  /* Demo frame: sized to the gif's native resolution (800x478) so it never scales up */
   .demo-frame {
-    margin: 48px 0 0;
+    margin: 48px auto 0;
     background: var(--surface);
     border: 1px solid var(--border-strong);
     border-radius: 14px;
     padding: 10px;
+    width: fit-content;
+    max-width: 100%;
     box-shadow: 0 30px 80px rgba(0,0,0,.6), 0 0 0 1px rgba(80,198,247,.05) inset;
   }
   .demo-frame .titlebar {
@@ -144,7 +146,12 @@
   }
   .demo-frame .dot { width: 10px; height: 10px; border-radius: 50%; background: #333; }
   .demo-frame img {
-    display: block; width: 100%; border-radius: 8px;
+    display: block;
+    box-sizing: content-box;
+    width: 800px;
+    max-width: 100%;
+    height: auto;
+    border-radius: 8px;
     border: 1px solid rgba(255,255,255,.04);
   }
 
@@ -165,20 +172,50 @@
   .feature .ico { width: 32px; height: 32px; margin-bottom: 18px; color: var(--accent); }
 
   /* Install section */
-  .install-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+  .install-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
   .install {
     background: var(--bg-2); border: 1px solid var(--border);
     border-radius: 12px; padding: 20px;
+    display: flex; flex-direction: column;
   }
   .install h4 { margin: 0 0 10px; font-size: 14px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
   code, pre { font-family: var(--mono); font-size: 13px; }
-  .install pre {
-    margin: 0; background: #05080c;
-    border: 1px solid var(--border); border-radius: 8px;
-    padding: 14px 16px; overflow-x: auto;
-    color: var(--text);
+  .term {
+    position: relative;
+    background: #05080c;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    flex: 1;
   }
-  .install pre .pfx { color: var(--text-dim); }
+  .term pre {
+    margin: 0;
+    padding: 14px 44px 14px 16px;
+    color: var(--text);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    line-height: 1.55;
+  }
+  .term pre .pfx { color: var(--text-dim); user-select: none; }
+  .copy-btn {
+    position: absolute; top: 8px; right: 8px;
+    width: 28px; height: 28px;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: rgba(20, 26, 34, 0.8);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-dim);
+    cursor: pointer;
+    transition: color .15s ease, border-color .15s ease, background .15s ease;
+  }
+  .copy-btn:hover { color: var(--text); border-color: var(--accent-deep); background: rgba(29, 140, 196, 0.15); }
+  .copy-btn:active { transform: scale(0.94); }
+  .copy-btn.copied { color: var(--ok); border-color: var(--ok); background: rgba(90, 216, 140, 0.12); }
+  .copy-btn svg { width: 14px; height: 14px; }
+  .copy-btn .icon-check { display: none; }
+  .copy-btn.copied .icon-copy { display: none; }
+  .copy-btn.copied .icon-check { display: block; }
 
   /* Quote-ish */
   .why {
@@ -221,10 +258,9 @@
 <main>
 
   <section class="hero">
-    <div class="eyebrow">Linux · GTK4 · v0.1.2</div>
     <h1>Run <span class="accent">ten agents</span> in parallel without losing&nbsp;track of them.</h1>
     <p class="lede">
-      Séance is a terminal multiplexer that auto-detects your Claude Code, Codex, and Pi sessions and shows you — live, in one place — which one is working, which one is blocked on a permission prompt, and which one finished four minutes ago.
+      Séance is a terminal multiplexer that auto-detects your Claude Code, Codex, and Pi sessions and shows you, live and in one place, which one is working, which one is blocked on a permission prompt, and which one finished four minutes ago.
     </p>
     <div class="cta-row">
       <a class="btn primary" href="https://github.com/no1msd/seance">
@@ -247,7 +283,7 @@
       <p style="margin:0;">
         <strong>Running one AI agent?</strong> tmux is fine.
         <br><br>
-        <strong>Running six?</strong> Half your time is spent tabbing around trying to figure out which one is stuck, which needs permission, and which is done. Séance fixes that. Zero config — open an agent inside, and it's tracked.
+        <strong>Running six?</strong> Half your time is spent tabbing around trying to figure out which one is stuck, which needs permission, and which is done. Séance fixes that. Zero config: open an agent inside, and it's tracked.
       </p>
     </div>
   </section>
@@ -292,30 +328,78 @@
 
   <section id="install">
     <div class="section-title">Install</div>
-    <h2 class="section-lede">Linux only — GTK4, libadwaita, OpenGL 4.3+.</h2>
+    <h2 class="section-lede">Linux only. GTK4, libadwaita, OpenGL 4.3+.</h2>
 
     <div class="install-grid">
       <div class="install">
         <h4>Arch Linux (AUR)</h4>
-        <pre><span class="pfx">$</span> yay -S seance</pre>
+        <div class="term">
+          <pre><span class="pfx">$ </span>yay -S seance</pre>
+          <button class="copy-btn" type="button" aria-label="Copy command" data-copy="yay -S seance">
+            <svg class="icon-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+            <svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 12 10 18 20 6"/></svg>
+          </button>
+        </div>
       </div>
       <div class="install">
         <h4>Nix flake</h4>
-        <pre><span class="pfx">$</span> nix run "git+https://github.com/no1msd/seance?submodules=1"</pre>
+        <div class="term">
+          <pre><span class="pfx">$ </span>nix run "git+https://github.com/no1msd/seance?submodules=1"</pre>
+          <button class="copy-btn" type="button" aria-label="Copy command" data-copy='nix run "git+https://github.com/no1msd/seance?submodules=1"'>
+            <svg class="icon-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+            <svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 12 10 18 20 6"/></svg>
+          </button>
+        </div>
       </div>
       <div class="install">
         <h4>AppImage</h4>
-        <pre><span class="pfx">$</span> chmod +x seance-*-x86_64.AppImage
-<span class="pfx">$</span> ./seance-*-x86_64.AppImage</pre>
+        <div class="term">
+          <pre><span class="pfx">$ </span>chmod +x seance-*-x86_64.AppImage
+<span class="pfx">$ </span>./seance-*-x86_64.AppImage</pre>
+          <button class="copy-btn" type="button" aria-label="Copy command" data-copy="chmod +x seance-*-x86_64.AppImage
+./seance-*-x86_64.AppImage">
+            <svg class="icon-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+            <svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 12 10 18 20 6"/></svg>
+          </button>
+        </div>
       </div>
       <div class="install">
         <h4>From source</h4>
-        <pre><span class="pfx">$</span> git clone --recursive \
-    https://github.com/no1msd/seance.git
-<span class="pfx">$</span> cd seance && zig build</pre>
+        <div class="term">
+          <pre><span class="pfx">$ </span>git clone --recursive https://github.com/no1msd/seance.git
+<span class="pfx">$ </span>cd seance && zig build</pre>
+          <button class="copy-btn" type="button" aria-label="Copy command" data-copy="git clone --recursive https://github.com/no1msd/seance.git
+cd seance && zig build">
+            <svg class="icon-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+            <svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 12 10 18 20 6"/></svg>
+          </button>
+        </div>
       </div>
     </div>
   </section>
+
+  <script>
+    document.querySelectorAll('.copy-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var text = btn.getAttribute('data-copy') || '';
+        navigator.clipboard.writeText(text).then(function() {
+          btn.classList.add('copied');
+          setTimeout(function() { btn.classList.remove('copied'); }, 1400);
+        }).catch(function() {
+          var ta = document.createElement('textarea');
+          ta.value = text;
+          ta.style.position = 'fixed';
+          ta.style.opacity = '0';
+          document.body.appendChild(ta);
+          ta.select();
+          try { document.execCommand('copy'); } catch (e) {}
+          document.body.removeChild(ta);
+          btn.classList.add('copied');
+          setTimeout(function() { btn.classList.remove('copied'); }, 1400);
+        });
+      });
+    });
+  </script>
 
   <footer>
     <div>Séance is MIT-licensed. Built with <a href="https://ziglang.org">Zig</a>, <a href="https://gtk.org">GTK4</a>, and <a href="https://ghostty.org">libghostty</a>.</div>
