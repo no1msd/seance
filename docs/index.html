@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Séance — terminal multiplexer for AI coding agents</title>
+<meta name="description" content="A Linux terminal multiplexer that tracks parallel AI coding agents. Auto-detects Claude Code, Codex, and Pi sessions. Scrolling pane layout, GPU-accelerated, scriptable over a Unix socket.">
+<link rel="icon" type="image/svg+xml" href="logo.svg">
+
+<meta property="og:title" content="Séance — terminal multiplexer for AI coding agents">
+<meta property="og:description" content="Run 10 Claude Code sessions in parallel without losing track of which one needs you. Linux-native, scrolling layout, GPU-accelerated.">
+<meta property="og:image" content="https://no1msd.github.io/seance/og.png">
+<meta property="og:url" content="https://no1msd.github.io/seance">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Séance — terminal multiplexer for AI coding agents">
+<meta name="twitter:description" content="Run 10 Claude Code sessions in parallel without losing track of which one needs you.">
+<meta name="twitter:image" content="https://no1msd.github.io/seance/og.png">
+
+<style>
+  :root {
+    --bg: #0a0d12;
+    --bg-2: #0f141b;
+    --surface: #141a22;
+    --border: rgba(80, 198, 247, 0.14);
+    --border-strong: rgba(80, 198, 247, 0.28);
+    --text: #e6ebf2;
+    --text-dim: #8a96a8;
+    --accent: #50c6f7;
+    --accent-deep: #1d8cc4;
+    --accent-darker: #09476f;
+    --warn: #f5a623;
+    --ok: #5ad88c;
+    --mono: "JetBrains Mono", "Fira Code", ui-monospace, SFMono-Regular, Menlo, monospace;
+    --sans: ui-sans-serif, -apple-system, "Inter", system-ui, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  /* Ambient background */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(800px 500px at 15% -10%, rgba(80, 198, 247, 0.12), transparent 60%),
+      radial-gradient(600px 400px at 90% 20%, rgba(29, 140, 196, 0.10), transparent 60%),
+      linear-gradient(180deg, var(--bg), var(--bg-2));
+    z-index: -2;
+  }
+  body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(80,198,247,.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(80,198,247,.035) 1px, transparent 1px);
+    background-size: 64px 64px;
+    mask-image: radial-gradient(ellipse at 50% 0%, black 40%, transparent 80%);
+    z-index: -1;
+    pointer-events: none;
+  }
+
+  nav {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 24px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; letter-spacing: -0.01em; }
+  .brand img { width: 28px; height: 28px; }
+  nav ul { list-style: none; margin: 0; padding: 0; display: flex; gap: 24px; font-size: 14px; }
+  nav ul a { color: var(--text-dim); }
+  nav ul a:hover { color: var(--text); text-decoration: none; }
+
+  main { max-width: 1100px; margin: 0 auto; padding: 0 32px; }
+
+  .hero { padding: 64px 0 40px; text-align: left; }
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-family: var(--mono); font-size: 12px; color: var(--accent);
+    background: rgba(80, 198, 247, 0.08);
+    border: 1px solid var(--border);
+    padding: 6px 12px; border-radius: 999px;
+    margin-bottom: 24px;
+  }
+  .eyebrow::before { content: ""; width: 6px; height: 6px; background: var(--accent); border-radius: 50%; box-shadow: 0 0 8px var(--accent); }
+  h1 {
+    font-size: clamp(40px, 6vw, 68px);
+    line-height: 1.05;
+    margin: 0 0 18px;
+    letter-spacing: -0.025em;
+    font-weight: 700;
+  }
+  h1 .accent {
+    background: linear-gradient(180deg, #9adaf7 0%, var(--accent) 60%, var(--accent-deep) 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .lede {
+    font-size: 20px; color: var(--text-dim);
+    max-width: 680px; margin: 0 0 32px; line-height: 1.5;
+  }
+  .cta-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 12px 20px; border-radius: 10px;
+    font-family: var(--sans); font-size: 15px; font-weight: 600;
+    border: 1px solid var(--border-strong); color: var(--text);
+    background: var(--surface);
+    transition: transform .15s ease, border-color .15s ease, background .15s ease;
+  }
+  .btn:hover { text-decoration: none; border-color: var(--accent); transform: translateY(-1px); }
+  .btn.primary {
+    background: linear-gradient(180deg, var(--accent) 0%, var(--accent-deep) 100%);
+    color: #04121c; border-color: transparent;
+    box-shadow: 0 8px 24px rgba(80, 198, 247, 0.25);
+  }
+  .btn.primary:hover { background: linear-gradient(180deg, #8adcf9, var(--accent)); }
+
+  /* Demo frame */
+  .demo-frame {
+    margin: 48px 0 0;
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    border-radius: 14px;
+    padding: 10px;
+    box-shadow: 0 30px 80px rgba(0,0,0,.6), 0 0 0 1px rgba(80,198,247,.05) inset;
+  }
+  .demo-frame .titlebar {
+    height: 24px; display: flex; align-items: center; gap: 6px; padding: 0 10px 10px;
+  }
+  .demo-frame .dot { width: 10px; height: 10px; border-radius: 50%; background: #333; }
+  .demo-frame img {
+    display: block; width: 100%; border-radius: 8px;
+    border: 1px solid rgba(255,255,255,.04);
+  }
+
+  section { padding: 80px 0; }
+  .section-title {
+    font-family: var(--mono); font-size: 12px; text-transform: uppercase;
+    letter-spacing: 0.12em; color: var(--accent); margin-bottom: 16px;
+  }
+  .section-lede {
+    font-size: 32px; font-weight: 700; letter-spacing: -0.02em;
+    margin: 0 0 48px; max-width: 720px; line-height: 1.2;
+  }
+
+  .features { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+  .feature { background: var(--bg-2); padding: 32px; }
+  .feature h3 { margin: 0 0 8px; font-size: 18px; letter-spacing: -0.01em; }
+  .feature p { margin: 0; color: var(--text-dim); font-size: 15px; line-height: 1.6; }
+  .feature .ico { width: 32px; height: 32px; margin-bottom: 18px; color: var(--accent); }
+
+  /* Install section */
+  .install-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+  .install {
+    background: var(--bg-2); border: 1px solid var(--border);
+    border-radius: 12px; padding: 20px;
+  }
+  .install h4 { margin: 0 0 10px; font-size: 14px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
+  code, pre { font-family: var(--mono); font-size: 13px; }
+  .install pre {
+    margin: 0; background: #05080c;
+    border: 1px solid var(--border); border-radius: 8px;
+    padding: 14px 16px; overflow-x: auto;
+    color: var(--text);
+  }
+  .install pre .pfx { color: var(--text-dim); }
+
+  /* Quote-ish */
+  .why {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 14px; padding: 40px;
+    font-size: 20px; line-height: 1.55; color: var(--text-dim);
+  }
+  .why strong { color: var(--text); font-weight: 600; }
+
+  footer {
+    padding: 48px 0 64px; color: var(--text-dim); font-size: 14px;
+    border-top: 1px solid var(--border); margin-top: 48px;
+    display: flex; justify-content: space-between; flex-wrap: wrap; gap: 16px;
+  }
+
+  @media (max-width: 640px) {
+    nav { padding: 16px 20px; }
+    main { padding: 0 20px; }
+    .hero { padding: 32px 0 24px; }
+    section { padding: 56px 0; }
+    .section-lede { font-size: 24px; }
+    .feature { padding: 24px; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="brand">
+    <img src="logo.svg" alt="">
+    <span>Séance</span>
+  </div>
+  <ul>
+    <li><a href="#features">Features</a></li>
+    <li><a href="#install">Install</a></li>
+    <li><a href="https://github.com/no1msd/seance">GitHub</a></li>
+  </ul>
+</nav>
+
+<main>
+
+  <section class="hero">
+    <div class="eyebrow">Linux · GTK4 · v0.1.2</div>
+    <h1>Run <span class="accent">ten agents</span> in parallel without losing&nbsp;track of them.</h1>
+    <p class="lede">
+      Séance is a terminal multiplexer that auto-detects your Claude Code, Codex, and Pi sessions and shows you — live, in one place — which one is working, which one is blocked on a permission prompt, and which one finished four minutes ago.
+    </p>
+    <div class="cta-row">
+      <a class="btn primary" href="https://github.com/no1msd/seance">
+        View on GitHub →
+      </a>
+      <a class="btn" href="#install">Install</a>
+      <a class="btn" href="https://github.com/no1msd/seance/releases">Releases</a>
+    </div>
+
+    <div class="demo-frame">
+      <div class="titlebar">
+        <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+      </div>
+      <img src="demo.gif" alt="Séance in action: running multiple AI coding agents in parallel, with live status tracking and desktop notifications">
+    </div>
+  </section>
+
+  <section>
+    <div class="why">
+      <p style="margin:0;">
+        <strong>Running one AI agent?</strong> tmux is fine.
+        <br><br>
+        <strong>Running six?</strong> Half your time is spent tabbing around trying to figure out which one is stuck, which needs permission, and which is done. Séance fixes that. Zero config — open an agent inside, and it's tracked.
+      </p>
+    </div>
+  </section>
+
+  <section id="features">
+    <div class="section-title">What it does</div>
+    <h2 class="section-lede">A multiplexer that understands what's running inside it.</h2>
+
+    <div class="features">
+      <div class="feature">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="9"/></svg>
+        <h3>Real-time agent status</h3>
+        <p>Working, waiting for permission, idle. Live in the sidebar. Desktop notifications on permission prompts and task completions, with unread tracking.</p>
+      </div>
+      <div class="feature">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7h18M7 12h14M3 17h18"/></svg>
+        <h3>Scrolling pane layout</h3>
+        <p>A horizontal strip you scroll through, borrowed from <a href="https://github.com/YaLTeR/niri">niri</a>. Long, linear agent sessions fit scrolling better than tiling grids.</p>
+      </div>
+      <div class="feature">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+        <h3>Scriptable over a socket</h3>
+        <p>Every GUI action has a <code>seance ctl</code> equivalent. JSON output, Unix domain socket. A bundled skill file lets agents drive the multiplexer themselves.</p>
+      </div>
+      <div class="feature">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2 L4 6 L12 10 L20 6 Z"/><path d="M4 12 L12 16 L20 12"/><path d="M4 18 L12 22 L20 18"/></svg>
+        <h3>Zero-config hook injection</h3>
+        <p>Open a Claude Code, Codex, or Pi session inside Séance and it's tracked. The multiplexer injects hooks into each session without touching your dotfiles.</p>
+      </div>
+      <div class="feature">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18"/></svg>
+        <h3>GPU-accelerated via libghostty</h3>
+        <p>The terminal rendering core is <a href="https://ghostty.org">Ghostty</a>, used as a library. Fast, correct, supports ligatures and Unicode.</p>
+      </div>
+      <div class="feature">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 7l-8 8-4-4"/><rect x="3" y="3" width="18" height="18" rx="3"/></svg>
+        <h3>And the basics</h3>
+        <p>Workspaces, session persistence, tabs within columns, command palette, focus-follows-mouse, blur and transparency on X11 and Wayland.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="install">
+    <div class="section-title">Install</div>
+    <h2 class="section-lede">Linux only — GTK4, libadwaita, OpenGL 4.3+.</h2>
+
+    <div class="install-grid">
+      <div class="install">
+        <h4>Arch Linux (AUR)</h4>
+        <pre><span class="pfx">$</span> yay -S seance</pre>
+      </div>
+      <div class="install">
+        <h4>Nix flake</h4>
+        <pre><span class="pfx">$</span> nix run "git+https://github.com/no1msd/seance?submodules=1"</pre>
+      </div>
+      <div class="install">
+        <h4>AppImage</h4>
+        <pre><span class="pfx">$</span> chmod +x seance-*-x86_64.AppImage
+<span class="pfx">$</span> ./seance-*-x86_64.AppImage</pre>
+      </div>
+      <div class="install">
+        <h4>From source</h4>
+        <pre><span class="pfx">$</span> git clone --recursive \
+    https://github.com/no1msd/seance.git
+<span class="pfx">$</span> cd seance && zig build</pre>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div>Séance is MIT-licensed. Built with <a href="https://ziglang.org">Zig</a>, <a href="https://gtk.org">GTK4</a>, and <a href="https://ghostty.org">libghostty</a>.</div>
+    <div><a href="https://github.com/no1msd/seance">github.com/no1msd/seance</a></div>
+  </footer>
+
+</main>
+
+</body>
+</html>
