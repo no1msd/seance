@@ -1,0 +1,16 @@
+title: ""
+labels: []
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What did you build / set up?
+      description: Dotfiles, custom layouts, scripts wrapping `seance ctl`, multi-agent flows you've wired up. All welcome.
+    validations:
+      required: true
+
+  - type: textarea
+    id: screenshot
+    attributes:
+      label: Screenshot or recording (optional)
+      description: Drag and drop a PNG / GIF / MP4.

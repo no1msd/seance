@@ -1,0 +1,67 @@
+name: Bug report
+description: Something is broken or behaves unexpectedly.
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. A small amount of detail up front saves a lot of back-and-forth.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What did you do, what did you expect to happen, what happened instead?
+      placeholder: |
+        I opened a Claude Code session inside a pane and...
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Launch `seance`
+        2. Open a pane with `claude` inside
+        3. ...
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Séance version
+      description: Output of `seance --version`, or the git SHA if built from source.
+      placeholder: "0.1.2"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install-method
+    attributes:
+      label: How did you install it?
+      options:
+        - AUR
+        - Nix flake
+        - AppImage
+        - Built from source
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: distro
+    attributes:
+      label: Distro and desktop
+      placeholder: "Arch Linux, GNOME 47 on Wayland"
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Run `seance` from a terminal and paste anything suspicious. Trim long traces to the relevant portion.
+      render: shell

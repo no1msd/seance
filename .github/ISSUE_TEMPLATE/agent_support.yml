@@ -1,0 +1,26 @@
+name: Agent support request
+description: Request auto-tracking support for a new AI coding agent (Aider, Goose, OpenCode, Gemini CLI, etc.).
+title: "[agent] add support for "
+labels: ["enhancement", "agent-support"]
+body:
+  - type: input
+    id: agent-name
+    attributes:
+      label: Agent name and link
+      placeholder: "Aider — https://github.com/paul-gauthier/aider"
+    validations:
+      required: true
+
+  - type: textarea
+    id: hook-system
+    attributes:
+      label: Does the agent have a hook / event system?
+      description: Link to its hook documentation if you know about one. If it doesn't have hooks, describe how you'd detect status changes (e.g. parsing terminal output, a status file, a socket).
+    validations:
+      required: true
+
+  - type: textarea
+    id: lifecycle-events
+    attributes:
+      label: Lifecycle events you care about
+      description: At minimum Séance tracks working / waiting for permission / idle. What does "waiting for permission" look like for this agent?

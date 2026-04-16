@@ -1,0 +1,26 @@
+name: Feature request
+description: Suggest an improvement or a new capability.
+title: "[feature] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the pain point, not the proposed fix. The more concrete, the better.
+      placeholder: |
+        When I run N agents in parallel, I can't tell which are costing me the most tokens, so...
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would it look like?
+      description: Rough proposal. UI mockups, CLI flag names, API shape. Anything that helps visualise it.
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you've considered
+      description: Workarounds or other approaches you've tried or rejected.
