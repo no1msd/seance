@@ -24,13 +24,19 @@
 
 ## Why Séance?
 
-Running multiple AI coding agents at once means constantly checking which one finished, which one is stuck waiting for permission, and which one needs your attention.
+Séance is a GTK4 terminal multiplexer for Linux. It auto-detects [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [Codex](https://github.com/openai/codex), and [Pi](https://github.com/badlogic/pi-mono) sessions running inside it and tracks their status (working, waiting for permission, idle) live in the sidebar. Permission requests and task completions are surfaced as desktop notifications with unread tracking. Zero configuration, no dotfile edits: open an agent in a pane and it is tracked.
 
-Séance automatically injects hooks into [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [Codex](https://github.com/openai/codex), and [Pi](https://github.com/badlogic/pi-mono) sessions with zero configuration so it can track what each one is doing. Agent status (working, waiting for permission, idle) is shown in the sidebar in real time, and events like permission requests or task completions are delivered as desktop notifications with unread tracking.
+### Linux-native, not Electron
+
+GTK4 and libadwaita, so it integrates with the rest of GNOME and with tiling WM setups. X11 and Wayland. Blur and transparency on both. GPU-accelerated terminal rendering via [libghostty](https://ghostty.org) (Ghostty used as a library).
 
 ### Scrolling layout
 
-Panes are arranged in a horizontal strip that you scroll through, borrowing the layout model from [niri](https://github.com/YaLTeR/niri).
+Panes are arranged in a horizontal strip that you scroll through, borrowing the layout model from [niri](https://github.com/YaLTeR/niri). Fits long, linear agent sessions better than a tiling grid, and lines up naturally with scrolling tiling WMs.
+
+### Agent-agnostic
+
+Claude Code, Codex, and Pi are auto-tracked out of the box. Adding support for another agent is a hook config PR rather than a rewrite. Agents that do not speak hooks still get all the plain multiplexer features.
 
 ### Scriptable
 
@@ -40,7 +46,7 @@ A bundled [skill file](skills/seance-skill.md) provides AI agents with a complet
 
 ### And also
 
-Workspaces, session persistence across restarts, tabs within columns, a command palette, blur and transparency on X11 and Wayland, focus-follows-mouse, and GPU-accelerated rendering via [libghostty](https://ghostty.org).
+Workspaces, session persistence across restarts, tabs within columns, a command palette, focus-follows-mouse, and no telemetry.
 
 ## Installation
 
@@ -112,6 +118,10 @@ zig build
 ```
 
 The binary is at `zig-out/bin/seance`.
+
+## Contributing
+
+Bug reports, feature requests, and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for how to file issues, build locally, and add support for new agents. Questions and show-and-tell go in [Discussions](https://github.com/no1msd/seance/discussions). Security issues should be reported privately, see [SECURITY.md](SECURITY.md).
 
 ## License
 

@@ -7,7 +7,7 @@ body:
     id: agent-name
     attributes:
       label: Agent name and link
-      placeholder: "Aider — https://github.com/paul-gauthier/aider"
+      placeholder: "Aider, https://github.com/paul-gauthier/aider"
     validations:
       required: true
 

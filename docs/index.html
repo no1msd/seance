@@ -8,13 +8,13 @@
 <link rel="icon" type="image/svg+xml" href="logo.svg">
 
 <meta property="og:title" content="Séance: terminal multiplexer for AI coding agents">
-<meta property="og:description" content="Run 10 Claude Code sessions in parallel without losing track of which one needs you. Linux-native, scrolling layout, GPU-accelerated.">
+<meta property="og:description" content="Linux-native terminal multiplexer that auto-tracks Claude Code, Codex, and Pi sessions. Scrolling niri-style layout, libghostty rendering, scriptable over a socket.">
 <meta property="og:image" content="https://no1msd.github.io/seance/og.png">
 <meta property="og:url" content="https://no1msd.github.io/seance">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Séance: terminal multiplexer for AI coding agents">
-<meta name="twitter:description" content="Run 10 Claude Code sessions in parallel without losing track of which one needs you.">
+<meta name="twitter:description" content="Linux-native terminal multiplexer that auto-tracks Claude Code, Codex, and Pi sessions. Scrolling niri-style layout.">
 <meta name="twitter:image" content="https://no1msd.github.io/seance/og.png">
 
 <style>
@@ -73,15 +73,32 @@
   }
 
   nav {
+    position: sticky; top: 0; z-index: 20;
+    background: rgba(11, 14, 18, 0.72);
+    backdrop-filter: saturate(140%) blur(10px);
+    -webkit-backdrop-filter: saturate(140%) blur(10px);
+    border-bottom: 1px solid var(--border);
+  }
+  .nav-inner {
     max-width: 1100px;
     margin: 0 auto;
-    padding: 24px 32px;
+    padding: 18px 32px;
     display: flex;
     align-items: center;
     justify-content: space-between;
   }
-  .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; letter-spacing: -0.01em; }
-  .brand img { width: 28px; height: 28px; }
+  .brand { display: flex; align-items: baseline; gap: 10px; font-weight: 600; letter-spacing: -0.01em; }
+  .brand img { width: 28px; height: 28px; align-self: center; }
+  .brand-tag {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 400;
+    color: var(--text-dim);
+    letter-spacing: 0;
+    padding-left: 10px;
+    border-left: 1px solid var(--border-strong);
+    opacity: 0.8;
+  }
   nav ul { list-style: none; margin: 0; padding: 0; display: flex; gap: 24px; font-size: 14px; }
   nav ul a { color: var(--text-dim); }
   nav ul a:hover { color: var(--text); text-decoration: none; }
@@ -99,19 +116,22 @@
   }
   .eyebrow::before { content: ""; width: 6px; height: 6px; background: var(--accent); border-radius: 50%; box-shadow: 0 0 8px var(--accent); }
   h1 {
-    font-size: clamp(40px, 6vw, 68px);
-    line-height: 1.05;
-    margin: 0 0 18px;
+    font-size: clamp(38px, 5.5vw, 60px);
+    line-height: 1.08;
+    margin: 0 0 20px;
     letter-spacing: -0.025em;
     font-weight: 700;
+    text-wrap: balance;
   }
   h1 .accent {
+    display: block;
     background: linear-gradient(180deg, #9adaf7 0%, var(--accent) 60%, var(--accent-deep) 100%);
     -webkit-background-clip: text; background-clip: text; color: transparent;
   }
   .lede {
-    font-size: 20px; color: var(--text-dim);
-    max-width: 680px; margin: 0 0 32px; line-height: 1.5;
+    font-size: 19px; color: var(--text-dim);
+    margin: 0 0 32px; line-height: 1.55;
+    text-wrap: pretty;
   }
   .cta-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
   .btn {
@@ -124,38 +144,37 @@
   }
   .btn:hover { text-decoration: none; border-color: var(--accent); transform: translateY(-1px); }
   .btn.primary {
-    background: linear-gradient(180deg, var(--accent) 0%, var(--accent-deep) 100%);
+    background: var(--accent);
     color: #04121c; border-color: transparent;
-    box-shadow: 0 8px 24px rgba(80, 198, 247, 0.25);
   }
-  .btn.primary:hover { background: linear-gradient(180deg, #8adcf9, var(--accent)); }
+  .btn.primary:hover { background: #8adcf9; }
 
-  /* Demo frame: sized to the gif's native resolution (800x478) so it never scales up */
+  /* Demo frame fills the full content column so it lines up with the
+     features/install grids below. The mp4 scales, so we don't need to cap it. */
   .demo-frame {
-    margin: 48px auto 0;
+    margin: 48px 0 0;
     background: var(--surface);
     border: 1px solid var(--border-strong);
     border-radius: 14px;
     padding: 10px;
-    width: fit-content;
-    max-width: 100%;
+    width: 100%;
     box-shadow: 0 30px 80px rgba(0,0,0,.6), 0 0 0 1px rgba(80,198,247,.05) inset;
   }
   .demo-frame .titlebar {
     height: 24px; display: flex; align-items: center; gap: 6px; padding: 0 10px 10px;
   }
   .demo-frame .dot { width: 10px; height: 10px; border-radius: 50%; background: #333; }
+  .demo-frame video,
   .demo-frame img {
     display: block;
-    box-sizing: content-box;
-    width: 800px;
-    max-width: 100%;
+    width: 100%;
     height: auto;
     border-radius: 8px;
     border: 1px solid rgba(255,255,255,.04);
+    background: #000;
   }
 
-  section { padding: 80px 0; }
+  section { padding: 80px 0; scroll-margin-top: 72px; }
   .section-title {
     font-family: var(--mono); font-size: 12px; text-transform: uppercase;
     letter-spacing: 0.12em; color: var(--accent); margin-bottom: 16px;
@@ -163,6 +182,7 @@
   .section-lede {
     font-size: 32px; font-weight: 700; letter-spacing: -0.02em;
     margin: 0 0 48px; max-width: 720px; line-height: 1.2;
+    text-wrap: balance;
   }
 
   .features { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
@@ -217,13 +237,6 @@
   .copy-btn.copied .icon-copy { display: none; }
   .copy-btn.copied .icon-check { display: block; }
 
-  /* Quote-ish */
-  .why {
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: 14px; padding: 40px;
-    font-size: 20px; line-height: 1.55; color: var(--text-dim);
-  }
-  .why strong { color: var(--text); font-weight: 600; }
 
   footer {
     padding: 48px 0 64px; color: var(--text-dim); font-size: 14px;
@@ -232,35 +245,39 @@
   }
 
   @media (max-width: 640px) {
-    nav { padding: 16px 20px; }
+    .nav-inner { padding: 14px 20px; }
     main { padding: 0 20px; }
     .hero { padding: 32px 0 24px; }
     section { padding: 56px 0; }
     .section-lede { font-size: 24px; }
     .feature { padding: 24px; }
+    .brand-tag { display: none; }
   }
 </style>
 </head>
 <body>
 
 <nav>
-  <div class="brand">
-    <img src="logo.svg" alt="">
-    <span>Séance</span>
+  <div class="nav-inner">
+    <div class="brand">
+      <img src="logo.svg" alt="">
+      <span>Séance</span>
+      <span class="brand-tag">summoning ghosttys</span>
+    </div>
+    <ul>
+      <li><a href="#features">Features</a></li>
+      <li><a href="#install">Install</a></li>
+      <li><a href="https://github.com/no1msd/seance">GitHub</a></li>
+    </ul>
   </div>
-  <ul>
-    <li><a href="#features">Features</a></li>
-    <li><a href="#install">Install</a></li>
-    <li><a href="https://github.com/no1msd/seance">GitHub</a></li>
-  </ul>
 </nav>
 
 <main>
 
   <section class="hero">
-    <h1>Run <span class="accent">ten agents</span> in parallel without losing&nbsp;track of them.</h1>
+    <h1>Run AI coding agents in parallel. <span class="accent">Without losing the thread.</span></h1>
     <p class="lede">
-      Séance is a terminal multiplexer that auto-detects your Claude Code, Codex, and Pi sessions and shows you, live and in one place, which one is working, which one is blocked on a permission prompt, and which one finished four minutes ago.
+      Séance is a Linux-native terminal multiplexer that auto-detects Claude Code, Codex, and Pi sessions and tracks each one live. Scrolling layout borrowed from niri, GPU-accelerated rendering via libghostty, fully scriptable over a Unix socket.
     </p>
     <div class="cta-row">
       <a class="btn primary" href="https://github.com/no1msd/seance">
@@ -274,17 +291,10 @@
       <div class="titlebar">
         <div class="dot"></div><div class="dot"></div><div class="dot"></div>
       </div>
-      <img src="demo.gif" alt="Séance in action: running multiple AI coding agents in parallel, with live status tracking and desktop notifications">
-    </div>
-  </section>
-
-  <section>
-    <div class="why">
-      <p style="margin:0;">
-        <strong>Running one AI agent?</strong> tmux is fine.
-        <br><br>
-        <strong>Running six?</strong> Half your time is spent tabbing around trying to figure out which one is stuck, which needs permission, and which is done. Séance fixes that. Zero config: open an agent inside, and it's tracked.
-      </p>
+      <video autoplay muted loop playsinline preload="metadata" poster="demo-poster.jpg" aria-label="Séance in action: running multiple AI coding agents in parallel with live status tracking">
+        <source src="demo.mp4" type="video/mp4">
+        <img src="demo.gif" alt="Séance in action: running multiple AI coding agents in parallel, with live status tracking and desktop notifications">
+      </video>
     </div>
   </section>
 
@@ -328,7 +338,7 @@
 
   <section id="install">
     <div class="section-title">Install</div>
-    <h2 class="section-lede">Linux only. GTK4, libadwaita, OpenGL 4.3+.</h2>
+    <h2 class="section-lede">Linux. GTK4, libadwaita, OpenGL 4.3+.</h2>
 
     <div class="install-grid">
       <div class="install">
