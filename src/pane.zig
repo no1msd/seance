@@ -1043,9 +1043,7 @@ fn onMouseMotion(
     const gtk_mods = if (event) |ev| c.gdk_event_get_modifier_state(ev) else @as(c.GdkModifierType, @bitCast(@as(c_uint, 0)));
     const mods = translateMods(gtk_mods);
 
-    const scale = getScale(pane);
-    c.ghostty_surface_mouse_pos(surface, x * scale, y * scale, mods);
-
+    c.ghostty_surface_mouse_pos(surface, x, y, mods);
 }
 
 fn onMousePress(
@@ -1107,13 +1105,6 @@ fn onScroll(
     // GTK4 scroll direction is inverted relative to Ghostty's expectation
     c.ghostty_surface_mouse_scroll(surface, dx, -dy, 0);
     return 1;
-}
-
-fn getScale(pane: *Pane) f64 {
-    if (pane.gl_area) |gl| {
-        return @floatFromInt(c.gtk_widget_get_scale_factor(@as(*c.GtkWidget, @ptrCast(gl))));
-    }
-    return 1.0;
 }
 
 // ── Scrollbar callbacks ─────────────────────────────────────────────
