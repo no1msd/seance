@@ -121,6 +121,7 @@ const groups = [_]Group{
         .title = "General",
         .rows = &.{
             .{ .single = .{ .action = .new_window, .label = "New Window" } },
+            .{ .single = .{ .action = .toggle_fullscreen, .label = "Fullscreen" } },
             .{ .single = .{ .action = .open_command_palette, .label = "Command Palette" } },
             .{ .single = .{ .action = .open_folder, .label = "Open Folder" } },
             .{ .single = .{ .action = .open_settings, .label = "Settings" } },

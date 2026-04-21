@@ -814,6 +814,15 @@ pub const WindowState = struct {
     /// `confirm_close_window` is enabled and there's interesting state to
     /// warn about (multiple windows or multiple workspaces), shows a single
     /// quit confirmation dialog instead of doing it per-window.
+    pub fn toggleFullscreen(self: *WindowState) void {
+        const win: *c.GtkWindow = @ptrCast(self.gtk_window);
+        if (c.gtk_window_is_fullscreen(win) != 0) {
+            c.gtk_window_unfullscreen(win);
+        } else {
+            c.gtk_window_fullscreen(win);
+        }
+    }
+
     pub fn quitApp(self: *WindowState) void {
         const cfg = config_mod.get();
         if (!cfg.confirm_close_window or !hasInterestingState(self.window_manager)) {
@@ -1552,6 +1561,16 @@ pub fn create(wm: *WindowManager) !*WindowState {
         0,
     );
 
+    // Hide CSD title bar when entering fullscreen
+    _ = c.g_signal_connect_data(
+        @as(c.gpointer, @ptrCast(window)),
+        "notify::fullscreened",
+        @as(c.GCallback, @ptrCast(&onFullscreenChanged)),
+        @ptrCast(state),
+        null,
+        0,
+    );
+
     // Load theme-aware CSS
     loadThemeCss();
 
@@ -1693,6 +1712,13 @@ fn onWindowFocusChanged(_: *c.GObject, _: ?*anyopaque, data: c.gpointer) callcon
             fp.triggerFlash();
         }
     }
+}
+
+fn onFullscreenChanged(_: *c.GObject, _: ?*anyopaque, data: c.gpointer) callconv(.c) void {
+    const state: *WindowState = @ptrCast(@alignCast(data));
+    const tv = state.toolbar_view orelse return;
+    const is_fullscreen = c.gtk_window_is_fullscreen(@as(*c.GtkWindow, @ptrCast(state.gtk_window)));
+    c.adw_toolbar_view_set_reveal_top_bars(@as(*c.AdwToolbarView, @ptrCast(tv)), if (is_fullscreen != 0) 0 else 1);
 }
 
 fn onWorkspaceSelect(index: usize) void {
