@@ -908,22 +908,21 @@ fn handleKeyEvent(
     const event = c.gtk_event_controller_get_current_event(@ptrCast(controller));
 
     // IME handling
+    defer pane.im_len = 0;
+
     if (pane.im_context) |ctx| {
-        const was_composing = pane.im_composing;
         pane.in_keyevent = true;
         defer pane.in_keyevent = false;
 
         const im_handled = c.gtk_im_context_filter_keypress(@ptrCast(ctx), event) != 0;
-        defer pane.im_len = 0;
 
         if (im_handled) {
             if (pane.im_composing) return true;
-            if (was_composing) return true;
             if (pane.im_len == 0) return true;
         }
     }
 
-    // If no text from IME, try to get text from keyval
+    // Prefer IME-committed text, fall back to keyval.
     if (pane.im_len == 0) {
         const unicode = c.gdk_keyval_to_unicode(keyval);
         if (unicode > 0 and unicode >= 0x20) {
@@ -933,6 +932,11 @@ fn handleKeyEvent(
                 } else |_| {}
             }
         }
+    }
+    var text_ptr: ?[*]const u8 = null;
+    if (pane.im_len > 0) {
+        pane.im_buf[pane.im_len] = 0;
+        text_ptr = &pane.im_buf;
     }
 
     // Build modifier state
@@ -946,11 +950,10 @@ fn handleKeyEvent(
         consumed = @intCast(translateMods(@bitCast(@as(c_uint, @bitCast(consumed_raw)) & @as(c_uint, @bitCast(c.GDK_MODIFIER_MASK)))));
     }
 
-    // Build text pointer (null-terminated)
-    var text_ptr: ?[*]const u8 = null;
-    if (pane.im_len > 0) {
-        pane.im_buf[pane.im_len] = 0;
-        text_ptr = &pane.im_buf;
+    // When IME has committed text, mark Shift as consumed since the text
+    // is already the "shifted" character (e.g., " produced by Shift+')
+    if (text_ptr != null and @as(c_uint, @bitCast(state)) & c.GDK_SHIFT_MASK != 0) {
+        consumed |= c.GHOSTTY_MODS_SHIFT;
     }
 
     // Get unshifted codepoint
@@ -984,6 +987,7 @@ fn onImCommit(_: *c.GtkIMContext, text: [*:0]const u8, user_data: c.gpointer) ca
         // Outside key event: send directly to ghostty
         if (pane.surface) |s| {
             c.ghostty_surface_text(s, text, text_slice.len);
+            pane.im_composing = false;
         }
     }
 }
@@ -1105,6 +1109,13 @@ fn onScroll(
     // GTK4 scroll direction is inverted relative to Ghostty's expectation
     c.ghostty_surface_mouse_scroll(surface, dx, -dy, 0);
     return 1;
+}
+
+fn getScale(pane: *Pane) f64 {
+    if (pane.gl_area) |gl| {
+        return @floatFromInt(c.gtk_widget_get_scale_factor(@as(*c.GtkWidget, @ptrCast(gl))));
+    }
+    return 1.0;
 }
 
 // ── Scrollbar callbacks ─────────────────────────────────────────────
