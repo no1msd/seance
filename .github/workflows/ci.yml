@@ -32,7 +32,8 @@ jobs:
             libgl-dev \
             libfontconfig-dev \
             libonig-dev \
-            xvfb
+            xvfb \
+            xdotool
 
       - name: Build
         run: zig build

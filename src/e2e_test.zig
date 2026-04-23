@@ -66,6 +66,8 @@ pub fn main() !void {
     runner.run("surface.focus + last", &harness, testSurfaceFocusLast);
     runner.run("surface.send_key", &harness, testSurfaceSendKey);
     runner.run("surface.health", &harness, testSurfaceHealth);
+    runner.run("dead keys: basic", &harness, testDeadKeysBasic);
+    runner.run("dead keys: quote", &harness, testDeadKeysQuote);
     runner.run("window lifecycle", &harness, testWindowLifecycle);
     runner.run("workspace.move_to_window", &harness, testWorkspaceMoveToWindow);
     runner.run("surface.expel", &harness, testSurfaceExpel);
@@ -85,7 +87,7 @@ const DisplayBackend = enum { native, cage, xvfb };
 fn detectBackend(alloc: Allocator) DisplayBackend {
     // Prefer the existing display — uses hardware GL, avoids software
     // rendering bugs (llvmpipe LLVM issues, NVIDIA headless EGL).
-    if (probeNativeDisplay(alloc)) {
+    if (probeNativeDisplay(alloc) and hasCommand(alloc, "xdotool")) {
         std.debug.print("seance e2e: using native X11 display (hardware GL)\n", .{});
         return .native;
     }
@@ -93,14 +95,14 @@ fn detectBackend(alloc: Allocator) DisplayBackend {
         std.debug.print("seance e2e: using cage (Wayland headless)\n", .{});
         return .cage;
     }
-    if (hasCommand(alloc, "Xvfb")) {
+    if (hasCommand(alloc, "Xvfb") and hasCommand(alloc, "xdotool")) {
         std.debug.print("seance e2e: using Xvfb (X11, software rendering)\n", .{});
         return .xvfb;
     }
-    std.debug.print("error: no display available and neither cage nor Xvfb found in PATH\n", .{});
+    std.debug.print("error: no display available and neither cage nor Xvfb found in PATH or missing xdotool\n", .{});
     std.debug.print("  arch (preferred): pacman -S cage\n", .{});
-    std.debug.print("  arch (fallback):  pacman -S xorg-server-xvfb\n", .{});
-    std.debug.print("  ubuntu:           apt install cage  # or: apt install xvfb\n", .{});
+    std.debug.print("  arch (fallback):  pacman -S xorg-server-xvfb xdotool\n", .{});
+    std.debug.print("  ubuntu:           apt install cage  # or: apt install xvfb xdotool\n", .{});
     std.process.exit(1);
 }
 
@@ -179,6 +181,7 @@ const Harness = struct {
     alloc: Allocator,
     tmp_dir: []const u8,
     socket_path: []const u8,
+    backend: DisplayBackend,
     /// cage pid (Wayland) or Xvfb pid (X11). Null if backend wraps seance directly.
     display_pid: ?posix.pid_t,
     /// seance pid (only set for Xvfb where seance is a separate process)
@@ -222,6 +225,7 @@ const Harness = struct {
             .alloc = alloc,
             .tmp_dir = tmp_dir,
             .socket_path = socket_path,
+            .backend = backend,
             .display_pid = null,
             .seance_pid = null,
         };
@@ -274,6 +278,13 @@ const Harness = struct {
         return error.Timeout;
     }
 
+    fn readPipeToAlloc(self: *Harness, file: *const std.fs.File) ?[]u8 {
+        var buf: [4096]u8 = undefined;
+        const n = file.deprecatedReader().readAll(&buf) catch return null;
+        if (n == 0) return null;
+        return self.alloc.dupe(u8, buf[0..n]) catch null;
+    }
+
     // ── Socket client ──────────────────────────────────────────────────
 
     const Response = struct {
@@ -297,6 +308,64 @@ const Harness = struct {
     pub fn callExpectFail(self: *Harness, method: []const u8, params: ?[]const u8) TestError!void {
         const resp = try self.call(method, params);
         if (resp.ok) return TestError.AssertionFailed;
+    }
+
+    /// Execute xdotool to send keys to seance window.
+    /// FIXME: only works on X11 native, skips in others.
+    pub fn execXdotool(self: *Harness, commands: []const []const u8) TestError!void {
+        if (self.backend == .cage) return TestError.Skip;
+        if (self.backend == .xvfb) return TestError.Skip;
+
+        const seance_pid = self.seance_pid orelse return TestError.Unexpected;
+
+        var argv_buf: std.ArrayList([]const u8) = .empty;
+        argv_buf.append(self.alloc, "xdotool") catch return TestError.Unexpected;
+        argv_buf.append(self.alloc, "search") catch return TestError.Unexpected;
+
+        argv_buf.append(self.alloc, "--pid") catch return TestError.Unexpected;
+        var pid_buf: [16]u8 = undefined;
+        const pid_str = std.fmt.bufPrint(&pid_buf, "{d}", .{seance_pid}) catch return TestError.Unexpected;
+        argv_buf.append(self.alloc, pid_str) catch return TestError.Unexpected;
+
+        argv_buf.append(self.alloc, "windowfocus") catch return TestError.Unexpected;
+        for (commands) |key| {
+            argv_buf.append(self.alloc, key) catch return TestError.Unexpected;
+        }
+
+        var child = std.process.Child.init(argv_buf.items, self.alloc);
+        child.stdin_behavior = .Ignore;
+        child.stdout_behavior = .Pipe;
+        child.stderr_behavior = .Pipe;
+        child.spawn() catch return TestError.Unexpected;
+
+        var stdout_buf: ?[]u8 = null;
+        var stderr_buf: ?[]u8 = null;
+        defer {
+            if (stdout_buf) |b| self.alloc.free(b);
+            if (stderr_buf) |b| self.alloc.free(b);
+        }
+
+        if (child.stdout) |f| stdout_buf = self.readPipeToAlloc(&f);
+        if (child.stderr) |f| stderr_buf = self.readPipeToAlloc(&f);
+
+        const term = child.wait() catch return TestError.Unexpected;
+
+        switch (term) {
+            .Exited => |code| if (code != 0) {
+                std.debug.print("  xdotool failed: pid={d} exit={d}\n", .{ seance_pid, code });
+                std.debug.print("                  out={s}\n", .{stdout_buf orelse "--"});
+                std.debug.print("                  err={s}\n", .{stderr_buf orelse "--"});
+                return TestError.Unexpected;
+            },
+            .Signal => |sig| {
+                std.debug.print("  xdotool killed by signal {d}\n", .{sig});
+                return TestError.Unexpected;
+            },
+            else => {
+                std.debug.print("  xdotool terminated unexpectedly\n", .{});
+                return TestError.Unexpected;
+            },
+        }
     }
 
     fn callRaw(self: *Harness, method: []const u8, params: ?[]const u8) !Response {
@@ -978,6 +1047,43 @@ fn testSurfaceHealth(h: *Harness) TestError!void {
     if (bad.ok) return TestError.AssertionFailed;
 }
 
+fn testDeadKeysBasic(h: *Harness) TestError!void {
+    try waitForSurface(h);
+    try h.expectScreen(null, "$", 2000);
+
+    try h.execXdotool(&.{ "key", "dead_acute", "a" });
+    try h.expectScreen(null, "á", 1000);
+
+    try h.execXdotool(&.{ "key", "dead_acute", "e" });
+    try h.expectScreen(null, "é", 1000);
+
+    try h.execXdotool(&.{ "key", "dead_acute", "i" });
+    try h.expectScreen(null, "í", 1000);
+
+    try h.execXdotool(&.{ "key", "dead_acute", "o" });
+    try h.expectScreen(null, "ó", 1000);
+
+    try h.execXdotool(&.{ "key", "dead_acute", "u" });
+    try h.expectScreen(null, "ú", 1000);
+
+    try h.execXdotool(&.{ "key", "dead_tilde", "n" });
+    try h.expectScreen(null, "ñ", 1000);
+
+    try h.execXdotool(&.{ "key", "dead_circumflex", "e" });
+    try h.expectScreen(null, "ê", 1000);
+}
+
+fn testDeadKeysQuote(h: *Harness) TestError!void {
+    try waitForSurface(h);
+    try h.expectScreen(null, "$", 2000);
+
+    try h.execXdotool(&.{ "keydown", "Shift", "key", "dead_diaeresis", "key", "space", "keyup", "Shift" });
+    try h.expectScreen(null, "\"", 1000);
+
+    try h.execXdotool(&.{ "keydown", "Shift", "key", "dead_diaeresis", "keyup", "Shift", "key", "space" });
+    try h.expectScreen(null, "\"", 1000);
+}
+
 fn testWindowLifecycle(h: *Harness) TestError!void {
     // Count windows before
     const before = try h.callOk("window.list", null);
@@ -1087,7 +1193,6 @@ fn testWorkspaceMoveToWindow(h: *Harness) TestError!void {
         std.Thread.sleep(100 * std.time.ns_per_ms);
         elapsed += 100;
     }
-
 }
 
 fn testSurfaceExpel(h: *Harness) TestError!void {
