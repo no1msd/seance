@@ -670,10 +670,10 @@ fn initSurface(pane: *Pane, width: u32, height: u32) void {
         if (std.fs.selfExePath(&exe_buf)) |exe_path| {
             if (std.fs.path.dirname(exe_path)) |exe_dir| {
                 if (std.fs.path.dirname(exe_dir)) |prefix| {
-                    if (std.fmt.bufPrintZ(&int_env_val_buf, "{s}/share/shell-integration", .{prefix})) |iv| {
+                    if (std.fmt.bufPrintZ(&int_env_val_buf, "{s}/share/seance/shell-integration", .{prefix})) |iv| {
                         int_val = iv;
                     } else |_| {}
-                    if (std.fmt.bufPrintZ(&bin_env_val_buf, "{s}/share/bin", .{prefix})) |bv| {
+                    if (std.fmt.bufPrintZ(&bin_env_val_buf, "{s}/share/seance/bin", .{prefix})) |bv| {
                         bin_val = bv;
                     } else |_| {}
                 }

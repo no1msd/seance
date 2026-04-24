@@ -182,14 +182,14 @@ pub fn build(b: *std.Build) void {
     b.installDirectory(.{
         .source_dir = b.path("resources/shell-integration"),
         .install_dir = .prefix,
-        .install_subdir = "share/shell-integration",
+        .install_subdir = "share/seance/shell-integration",
     });
 
     // Install wrapper scripts (claude wrapper, etc.)
     b.installDirectory(.{
         .source_dir = b.path("resources/bin"),
         .install_dir = .prefix,
-        .install_subdir = "share/bin",
+        .install_subdir = "share/seance/bin",
     });
 
     // Install bundled icons (from GNOME Icon Library) into hicolor theme
