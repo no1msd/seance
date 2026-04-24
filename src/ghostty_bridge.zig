@@ -211,6 +211,21 @@ fn createWrapperResourcesDir() bool {
         }
     }
 
+    // Symlink ghostty's .zshenv — ghostty sets ZDOTDIR to this directory so
+    // zsh auto-sources .zshenv, which restores the real ZDOTDIR and chains
+    // into ghostty-integration.  Without this symlink the wrapper directory
+    // has no .zshenv and zsh shows the new-user wizard.
+    {
+        var zbuf: [std.fs.max_path_bytes]u8 = undefined;
+        const ztarget = std.fmt.bufPrint(&zbuf, "{s}/shell-integration/zsh/.zshenv", .{real}) catch return false;
+        var zsh_dir = wd.openDir("shell-integration/zsh", .{}) catch return false;
+        defer zsh_dir.close();
+        zsh_dir.symLink(ztarget, ".zshenv", .{}) catch |e| {
+            std.log.warn("ghostty_bridge: failed to symlink .zshenv: {}", .{e});
+            return false;
+        };
+    }
+
     // Write wrapper shell integration scripts
     writeShellWrapper(wd, "shell-integration/bash/ghostty.bash", real, "/shell-integration/bash/ghostty.bash", "/bash-integration.sh") catch return false;
     writeShellWrapper(wd, "shell-integration/zsh/ghostty-integration", real, "/shell-integration/zsh/ghostty-integration", "/zsh-integration.sh") catch return false;
