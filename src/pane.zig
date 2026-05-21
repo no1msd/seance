@@ -834,6 +834,32 @@ fn initSurface(pane: *Pane, width: u32, height: u32) void {
 
 // ── Key event handling ──────────────────────────────────────────────
 
+// Map a keyval to the canonical Linux evdev+8 keycode that natively produces
+// it. Used to repair events where an xkb remap (e.g. Caps Lock to BackSpace)
+// changes the keyval but leaves the original physical keycode. libghostty's
+// key handling is keycode-driven, so the unremapped keycode would otherwise
+// be interpreted as the original physical key.
+fn canonicalKeycode(keyval: c.guint, keycode: c.guint) c.guint {
+    return switch (keyval) {
+        c.GDK_KEY_BackSpace => 22,
+        c.GDK_KEY_Tab, c.GDK_KEY_ISO_Left_Tab => 23,
+        c.GDK_KEY_Return => 36,
+        c.GDK_KEY_KP_Enter => 104,
+        c.GDK_KEY_Escape => 9,
+        c.GDK_KEY_Delete => 119,
+        c.GDK_KEY_Insert => 118,
+        c.GDK_KEY_Home => 110,
+        c.GDK_KEY_End => 115,
+        c.GDK_KEY_Page_Up => 112,
+        c.GDK_KEY_Page_Down => 117,
+        c.GDK_KEY_Left => 113,
+        c.GDK_KEY_Right => 114,
+        c.GDK_KEY_Up => 111,
+        c.GDK_KEY_Down => 116,
+        else => keycode,
+    };
+}
+
 fn translateMods(state: c.GdkModifierType) c.ghostty_input_mods_e {
     var mods: c_uint = c.GHOSTTY_MODS_NONE;
     const s: c_uint = @bitCast(state);
@@ -961,11 +987,18 @@ fn handleKeyEvent(
     // Get unshifted codepoint
     const unshifted = c.gdk_keyval_to_unicode(c.gdk_keyval_to_lower(keyval));
 
+    // Repair xkb keysym remaps (e.g. Caps Lock to BackSpace) by overriding
+    // the keycode to one that natively produces the same keyval. When the
+    // keycode changes, also strip the Lock-derived CAPS modifier so the
+    // remap source key doesn't leak Caps state into the synthesized event.
+    const effective_keycode = canonicalKeycode(keyval, keycode);
+    if (effective_keycode != keycode) mods &= ~@as(c_uint, c.GHOSTTY_MODS_CAPS);
+
     const key_ev = c.ghostty_input_key_s{
         .action = if (is_release) c.GHOSTTY_ACTION_RELEASE else c.GHOSTTY_ACTION_PRESS,
         .mods = @intCast(mods),
         .consumed_mods = @intCast(consumed),
-        .keycode = keycode,
+        .keycode = effective_keycode,
         .text = text_ptr,
         .unshifted_codepoint = @intCast(if (unshifted > 0) unshifted else 0),
         .composing = pane.im_composing,
