@@ -88,18 +88,20 @@ fn createWindow() void {
 
     const cfg = config_mod.get();
 
-    const window = c.adw_dialog_new();
-    c.adw_dialog_set_title(@as(*c.AdwDialog, @ptrCast(window)), "Settings");
-    c.adw_dialog_set_content_width(@as(*c.AdwDialog, @ptrCast(window)), 800);
-    c.adw_dialog_set_content_height(@as(*c.AdwDialog, @ptrCast(window)), 680);
+    // libadwaita 1.2 compat: AdwDialog (1.5) -> AdwWindow (a GtkWindow).
+    const window = c.adw_window_new();
+    c.gtk_window_set_title(@as(*c.GtkWindow, @ptrCast(window)), "Settings");
+    c.gtk_window_set_default_size(@as(*c.GtkWindow, @ptrCast(window)), 800, 680);
+    c.gtk_window_set_transient_for(@as(*c.GtkWindow, @ptrCast(window)), @ptrCast(@alignCast(parent.?)));
+    c.gtk_window_set_modal(@as(*c.GtkWindow, @ptrCast(window)), 1);
 
     // Header bar
     const header = c.adw_header_bar_new();
 
     // Toolbar view (flat top bar — gains separator on scroll)
-    const toolbar_view = c.adw_toolbar_view_new();
-    c.adw_toolbar_view_add_top_bar(@as(*c.AdwToolbarView, @ptrCast(toolbar_view)), @ptrCast(header));
-    c.adw_toolbar_view_set_top_bar_style(@as(*c.AdwToolbarView, @ptrCast(toolbar_view)), c.ADW_TOOLBAR_FLAT);
+    // libadwaita 1.2 compat: AdwToolbarView (1.4) -> vertical GtkBox.
+    const toolbar_view = c.gtk_box_new(c.GTK_ORIENTATION_VERTICAL, 0);
+    c.gtk_box_append(@ptrCast(toolbar_view), @ptrCast(header));
 
     // Preferences page (handles scrolling and group spacing)
     const page = c.adw_preferences_page_new();
@@ -115,8 +117,9 @@ fn createWindow() void {
     buildResetSection(page);
     updating = false;
 
-    c.adw_toolbar_view_set_content(@as(*c.AdwToolbarView, @ptrCast(toolbar_view)), page);
-    c.adw_dialog_set_child(@as(*c.AdwDialog, @ptrCast(window)), @ptrCast(toolbar_view));
+    c.gtk_widget_set_vexpand(page, 1);
+    c.gtk_box_append(@ptrCast(toolbar_view), page);
+    c.adw_window_set_content(@as(*c.AdwWindow, @ptrCast(window)), @ptrCast(toolbar_view));
 
     // Key controller for shortcut recording — attached to the dialog itself
     // with CAPTURE phase so we intercept keypresses before internal AdwDialog widgets.
@@ -134,10 +137,11 @@ fn createWindow() void {
     key_ctrl_ref = @as(*c.GtkEventController, @ptrCast(key_ctrl));
     dialog_widget_ref = @as(*c.GtkWidget, @ptrCast(window));
 
-    // Closed signal
+    // Destroy signal (AdwWindow has no AdwDialog "closed"); fires on user close
+    // too, since GtkWindow:hide-on-close defaults to false.
     _ = c.g_signal_connect_data(
         @as(c.gpointer, @ptrCast(window)),
-        "closed",
+        "destroy",
         @as(c.GCallback, @ptrCast(&onDialogClosed)),
         null,
         null,
@@ -145,7 +149,7 @@ fn createWindow() void {
     );
 
     win = @as(*c.GtkWidget, @ptrCast(window));
-    c.adw_dialog_present(@as(*c.AdwDialog, @ptrCast(window)), parent.?);
+    c.gtk_window_present(@as(*c.GtkWindow, @ptrCast(window)));
 }
 
 // ---------------------------------------------------------------------------
@@ -157,7 +161,7 @@ fn buildAppearanceSection(page: *c.GtkWidget, cfg: *const config_mod.Config) voi
     {
         const row = c.adw_combo_row_new();
         c.adw_preferences_row_set_title(@as(*c.AdwPreferencesRow, @ptrCast(row)), "Theme");
-        c.adw_combo_row_set_enable_search(@as(*c.AdwComboRow, @ptrCast(row)), 1);
+        // adw_combo_row_set_enable_search requires libadwaita 1.4; omitted on 1.2.
         const expression = c.gtk_property_expression_new(c.gtk_string_object_get_type(), null, "string");
         c.adw_combo_row_set_expression(@as(*c.AdwComboRow, @ptrCast(row)), expression);
 
@@ -172,14 +176,16 @@ fn buildAppearanceSection(page: *c.GtkWidget, cfg: *const config_mod.Config) voi
         const row = c.adw_action_row_new();
         c.adw_preferences_row_set_title(@as(*c.AdwPreferencesRow, @ptrCast(row)), "Font Family");
         c.adw_action_row_set_subtitle(@as(*c.AdwActionRow, @ptrCast(row)), "Terminal font face. Must be a monospace font.");
-        const btn = c.gtk_font_dialog_button_new(c.gtk_font_dialog_new());
+        // GTK 4.8 compat: GtkFontDialogButton is 4.10+; GtkFontButton (implements
+        // GtkFontChooser, has the "font-desc" property) is the older equivalent.
+        const btn = c.gtk_font_button_new();
         if (cfg.font_family_len > 0) {
             var desc_buf: [192]u8 = undefined;
             const desc_str = std.fmt.bufPrintZ(&desc_buf, "{s} {d}", .{ cfg.font_family[0..cfg.font_family_len], @as(u32, @intFromFloat(cfg.font_size orelse 11.0)) }) catch null;
             if (desc_str) |ds| {
                 const desc = c.pango_font_description_from_string(ds.ptr);
                 if (desc != null) {
-                    c.gtk_font_dialog_button_set_font_desc(@as(*c.GtkFontDialogButton, @ptrCast(btn)), desc);
+                    c.gtk_font_chooser_set_font_desc(@as(*c.GtkFontChooser, @ptrCast(btn)), desc);
                     c.pango_font_description_free(desc);
                 }
             }
@@ -593,13 +599,19 @@ fn newGroup(title: ?[*:0]const u8) *c.GtkWidget {
 }
 
 fn addSwitchRow(group: *c.GtkWidget, title: [*:0]const u8, subtitle: [*:0]const u8, active: bool) *c.GtkWidget {
-    const row = c.adw_switch_row_new();
+    // libadwaita 1.2 compat: AdwSwitchRow (1.4) -> AdwActionRow + GtkSwitch suffix.
+    // We return the GtkSwitch so callers store it for value get/set and identity.
+    const row = c.adw_action_row_new();
     c.adw_preferences_row_set_title(@as(*c.AdwPreferencesRow, @ptrCast(row)), title);
     c.adw_action_row_set_subtitle(@as(*c.AdwActionRow, @ptrCast(row)), subtitle);
-    c.adw_switch_row_set_active(@as(*c.AdwSwitchRow, @ptrCast(row)), if (active) 1 else 0);
+    const sw = c.gtk_switch_new();
+    c.gtk_switch_set_active(@as(*c.GtkSwitch, @ptrCast(sw)), if (active) 1 else 0);
+    c.gtk_widget_set_valign(sw, c.GTK_ALIGN_CENTER);
+    c.adw_action_row_add_suffix(@as(*c.AdwActionRow, @ptrCast(row)), sw);
+    c.adw_action_row_set_activatable_widget(@as(*c.AdwActionRow, @ptrCast(row)), sw);
     c.adw_preferences_group_add(@as(*c.AdwPreferencesGroup, @ptrCast(group)), @as(*c.GtkWidget, @ptrCast(row)));
-    _ = c.g_signal_connect_data(@as(c.gpointer, @ptrCast(row)), "notify::active", @as(c.GCallback, @ptrCast(&onSwitchChanged)), null, null, 0);
-    return @as(*c.GtkWidget, @ptrCast(row));
+    _ = c.g_signal_connect_data(@as(c.gpointer, @ptrCast(sw)), "notify::active", @as(c.GCallback, @ptrCast(&onSwitchChanged)), null, null, 0);
+    return @as(*c.GtkWidget, @ptrCast(sw));
 }
 
 fn addComboRow(group: *c.GtkWidget, title: [*:0]const u8, items: []const [*:0]const u8, selected: u32) *c.GtkWidget {
@@ -635,13 +647,19 @@ fn addEntryRow(group: *c.GtkWidget, title: [*:0]const u8, placeholder: [*:0]cons
 }
 
 fn addSpinRow(group: *c.GtkWidget, title: [*:0]const u8, subtitle: [*:0]const u8, min: f64, max: f64, step: f64, value: f64) *c.GtkWidget {
-    const row = c.adw_spin_row_new_with_range(min, max, step);
+    // libadwaita 1.2 compat: AdwSpinRow (1.4) -> AdwActionRow + GtkSpinButton suffix.
+    // We return the GtkSpinButton so callers store it for value get/set and identity.
+    const row = c.adw_action_row_new();
     c.adw_preferences_row_set_title(@as(*c.AdwPreferencesRow, @ptrCast(row)), title);
     c.adw_action_row_set_subtitle(@as(*c.AdwActionRow, @ptrCast(row)), subtitle);
-    c.adw_spin_row_set_value(@as(*c.AdwSpinRow, @ptrCast(row)), value);
+    const spin = c.gtk_spin_button_new_with_range(min, max, step);
+    c.gtk_spin_button_set_value(@as(*c.GtkSpinButton, @ptrCast(spin)), value);
+    c.gtk_widget_set_valign(spin, c.GTK_ALIGN_CENTER);
+    c.adw_action_row_add_suffix(@as(*c.AdwActionRow, @ptrCast(row)), spin);
+    c.adw_action_row_set_activatable_widget(@as(*c.AdwActionRow, @ptrCast(row)), spin);
     c.adw_preferences_group_add(@as(*c.AdwPreferencesGroup, @ptrCast(group)), @as(*c.GtkWidget, @ptrCast(row)));
-    _ = c.g_signal_connect_data(@as(c.gpointer, @ptrCast(row)), "notify::value", @as(c.GCallback, @ptrCast(&onSpinChanged)), null, null, 0);
-    return @as(*c.GtkWidget, @ptrCast(row));
+    _ = c.g_signal_connect_data(@as(c.gpointer, @ptrCast(spin)), "notify::value", @as(c.GCallback, @ptrCast(&onSpinChanged)), null, null, 0);
+    return @as(*c.GtkWidget, @ptrCast(spin));
 }
 
 fn addToPage(page: *c.GtkWidget, group: *c.GtkWidget) void {
@@ -655,7 +673,7 @@ fn addToPage(page: *c.GtkWidget, group: *c.GtkWidget) void {
 fn onSwitchChanged(obj: *c.GObject, _: *c.GParamSpec, _: c.gpointer) callconv(.c) void {
     if (updating) return;
     const widget: *c.GtkWidget = @ptrCast(obj);
-    const active = c.adw_switch_row_get_active(@as(*c.AdwSwitchRow, @ptrCast(widget))) != 0;
+    const active = c.gtk_switch_get_active(@as(*c.GtkSwitch, @ptrCast(widget))) != 0;
     const cfg = config_mod.getMut();
 
     if (widget == w.desktop_notifications) {
@@ -764,7 +782,7 @@ fn onSpinChanged(obj: *c.GObject, _: *c.GParamSpec, _: c.gpointer) callconv(.c) 
     const cfg = config_mod.getMut();
 
     // AdwSpinRow
-    const val = c.adw_spin_row_get_value(@as(*c.AdwSpinRow, @ptrCast(widget)));
+    const val = c.gtk_spin_button_get_value(@as(*c.GtkSpinButton, @ptrCast(widget)));
 
     if (widget == w.font_size) {
         cfg.font_size = val;
@@ -818,8 +836,8 @@ fn onEntryChanged(obj: *c.GtkEditable, _: c.gpointer) callconv(.c) void {
 
 fn onFontChanged(obj: *c.GObject, _: *c.GParamSpec, _: c.gpointer) callconv(.c) void {
     if (updating) return;
-    const btn: *c.GtkFontDialogButton = @ptrCast(@alignCast(obj));
-    const desc: ?*const c.PangoFontDescription = c.gtk_font_dialog_button_get_font_desc(btn);
+    const btn: *c.GtkFontChooser = @ptrCast(@alignCast(obj));
+    const desc: ?*const c.PangoFontDescription = c.gtk_font_chooser_get_font_desc(btn);
     if (desc) |d| {
         const family: ?[*:0]const u8 = c.pango_font_description_get_family(d);
         if (family) |f| {
@@ -834,7 +852,7 @@ fn onFontChanged(obj: *c.GObject, _: *c.GParamSpec, _: c.gpointer) callconv(.c) 
                 // Update font size spin if present
                 if (w.font_size) |spin| {
                     updating = true;
-                    c.adw_spin_row_set_value(@as(*c.AdwSpinRow, @ptrCast(spin)), pt);
+                    c.gtk_spin_button_set_value(@as(*c.GtkSpinButton, @ptrCast(spin)), pt);
                     updating = false;
                 }
             }
@@ -962,21 +980,22 @@ fn updateShortcutButtonLabel(action: keybinds.Action) void {
 
 fn onResetClicked(_: *c.GtkButton, _: c.gpointer) callconv(.c) void {
     // Show confirmation dialog
-    const dialog = c.adw_alert_dialog_new("Reset all settings to defaults?", "This will restore every setting to its default value. Your config file will be overwritten.");
-    c.adw_alert_dialog_add_response(@as(*c.AdwAlertDialog, @ptrCast(dialog)), "cancel", "Cancel");
-    c.adw_alert_dialog_add_response(@as(*c.AdwAlertDialog, @ptrCast(dialog)), "reset", "Reset All");
-    c.adw_alert_dialog_set_response_appearance(@as(*c.AdwAlertDialog, @ptrCast(dialog)), "reset", c.ADW_RESPONSE_DESTRUCTIVE);
-    c.adw_alert_dialog_set_default_response(@as(*c.AdwAlertDialog, @ptrCast(dialog)), "cancel");
-    c.adw_alert_dialog_set_close_response(@as(*c.AdwAlertDialog, @ptrCast(dialog)), "cancel");
+    const dialog = c.adw_message_dialog_new(null, "Reset all settings to defaults?", "This will restore every setting to its default value. Your config file will be overwritten.");
+    c.adw_message_dialog_add_response(@as(*c.AdwMessageDialog, @ptrCast(dialog)), "cancel", "Cancel");
+    c.adw_message_dialog_add_response(@as(*c.AdwMessageDialog, @ptrCast(dialog)), "reset", "Reset All");
+    c.adw_message_dialog_set_response_appearance(@as(*c.AdwMessageDialog, @ptrCast(dialog)), "reset", c.ADW_RESPONSE_DESTRUCTIVE);
+    c.adw_message_dialog_set_default_response(@as(*c.AdwMessageDialog, @ptrCast(dialog)), "cancel");
+    c.adw_message_dialog_set_close_response(@as(*c.AdwMessageDialog, @ptrCast(dialog)), "cancel");
 
     _ = c.g_signal_connect_data(@as(c.gpointer, @ptrCast(dialog)), "response", @as(c.GCallback, @ptrCast(&onResetResponse)), null, null, 0);
 
     if (win) |window| {
-        c.adw_dialog_present(@as(*c.AdwDialog, @ptrCast(dialog)), window);
+        c.gtk_window_set_transient_for(@as(*c.GtkWindow, @ptrCast(dialog)), @as(*c.GtkWindow, @ptrCast(window)));
+        c.gtk_window_present(@as(*c.GtkWindow, @ptrCast(dialog)));
     }
 }
 
-fn onResetResponse(_: *c.AdwAlertDialog, response: [*:0]const u8, _: c.gpointer) callconv(.c) void {
+fn onResetResponse(_: *c.AdwMessageDialog, response: [*:0]const u8, _: c.gpointer) callconv(.c) void {
     if (!std.mem.eql(u8, std.mem.sliceTo(response, 0), "reset")) return;
 
     // Reset config to defaults
@@ -992,7 +1011,7 @@ fn onResetResponse(_: *c.AdwAlertDialog, response: [*:0]const u8, _: c.gpointer)
 
     // Close settings and reopen to refresh all widgets
     if (win) |window| {
-        c.adw_dialog_force_close(@as(*c.AdwDialog, @ptrCast(window)));
+        c.gtk_window_destroy(@as(*c.GtkWindow, @ptrCast(window)));
     }
 }
 
@@ -1106,7 +1125,7 @@ fn onTestNotificationClicked(_: *c.GtkButton, _: c.gpointer) callconv(.c) void {
     state.sound_player.playPreview(cfg.notification_sound);
 }
 
-fn onDialogClosed(_: *c.AdwDialog, _: c.gpointer) callconv(.c) void {
+fn onDialogClosed(_: *c.GtkWidget, _: c.gpointer) callconv(.c) void {
     // Remove key controller from dialog widget (it owns the controller, so this frees it)
     if (key_ctrl_ref) |ctrl| {
         if (dialog_widget_ref) |dw| {

@@ -140,18 +140,19 @@ pub fn show(wm: *WindowManager) void {
     const parent = if (wm.active_window) |active| active.gtk_window else null;
     if (parent == null) return;
 
-    const win = c.adw_dialog_new();
-    c.adw_dialog_set_title(@as(*c.AdwDialog, @ptrCast(win)), "Keyboard Shortcuts");
-    c.adw_dialog_set_content_width(@as(*c.AdwDialog, @ptrCast(win)), 900);
-    c.adw_dialog_set_content_height(@as(*c.AdwDialog, @ptrCast(win)), 600);
+    // libadwaita 1.2 compat: AdwDialog (1.5) -> AdwWindow (a GtkWindow).
+    const win = c.adw_window_new();
+    c.gtk_window_set_title(@as(*c.GtkWindow, @ptrCast(win)), "Keyboard Shortcuts");
+    c.gtk_window_set_default_size(@as(*c.GtkWindow, @ptrCast(win)), 900, 600);
+    c.gtk_window_set_transient_for(@as(*c.GtkWindow, @ptrCast(win)), @ptrCast(@alignCast(parent.?)));
+    c.gtk_window_set_modal(@as(*c.GtkWindow, @ptrCast(win)), 1);
 
     // Header bar
     const header = c.adw_header_bar_new();
 
-    // Toolbar view (flat top bar)
-    const toolbar_view = c.adw_toolbar_view_new();
-    c.adw_toolbar_view_add_top_bar(@as(*c.AdwToolbarView, @ptrCast(toolbar_view)), @ptrCast(header));
-    c.adw_toolbar_view_set_top_bar_style(@as(*c.AdwToolbarView, @ptrCast(toolbar_view)), c.ADW_TOOLBAR_FLAT);
+    // libadwaita 1.2 compat: AdwToolbarView (1.4) -> vertical GtkBox.
+    const toolbar_view = c.gtk_box_new(c.GTK_ORIENTATION_VERTICAL, 0);
+    c.gtk_box_append(@ptrCast(toolbar_view), @ptrCast(header));
 
     // Two-column layout inside a scrolled window
     const scroll = c.gtk_scrolled_window_new();
@@ -181,13 +182,15 @@ pub fn show(wm: *WindowManager) void {
     c.gtk_box_append(@ptrCast(hbox), right_col);
     c.gtk_scrolled_window_set_child(@ptrCast(scroll), hbox);
 
-    c.adw_toolbar_view_set_content(@as(*c.AdwToolbarView, @ptrCast(toolbar_view)), scroll);
-    c.adw_dialog_set_child(@as(*c.AdwDialog, @ptrCast(win)), @ptrCast(toolbar_view));
+    c.gtk_widget_set_vexpand(scroll, 1);
+    c.gtk_box_append(@ptrCast(toolbar_view), scroll);
+    c.adw_window_set_content(@as(*c.AdwWindow, @ptrCast(win)), @ptrCast(toolbar_view));
 
-    // Closed signal — reset singleton
+    // Destroy signal — reset singleton (fires on user close too, since
+    // GtkWindow:hide-on-close defaults to false).
     _ = c.g_signal_connect_data(
         @as(c.gpointer, @ptrCast(win)),
-        "closed",
+        "destroy",
         @as(c.GCallback, @ptrCast(&onDialogClosed)),
         null,
         null,
@@ -195,7 +198,7 @@ pub fn show(wm: *WindowManager) void {
     );
 
     dialog = @as(*c.GtkWidget, @ptrCast(win));
-    c.adw_dialog_present(@as(*c.AdwDialog, @ptrCast(win)), parent.?);
+    c.gtk_window_present(@as(*c.GtkWindow, @ptrCast(win)));
 }
 
 // ---------------------------------------------------------------------------
@@ -279,6 +282,6 @@ fn addRangeRow(list: *c.GtkWidget, range: RangeEntry) void {
     c.gtk_list_box_append(@ptrCast(list), row);
 }
 
-fn onDialogClosed(_: *c.AdwDialog, _: c.gpointer) callconv(.c) void {
+fn onDialogClosed(_: *c.GtkWidget, _: c.gpointer) callconv(.c) void {
     dialog = null;
 }

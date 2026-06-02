@@ -83,7 +83,9 @@ pub const Pane = struct {
         c.gtk_gl_area_set_auto_render(gl_area, 0);
         // Ghostty requires desktop OpenGL (not OpenGL ES) — match ghostty's
         // own GTK apprt which uses allowed-apis: gl in the surface blueprint.
-        c.gtk_gl_area_set_allowed_apis(gl_area, c.GDK_GL_API_GL);
+        // GTK 4.8 compat: set_allowed_apis (4.12+) is unavailable; set_use_es(false)
+        // is the older equivalent for forcing desktop OpenGL (not GLES).
+        c.gtk_gl_area_set_use_es(gl_area, 0);
         c.gtk_widget_set_hexpand(gl_area_widget, 1);
         c.gtk_widget_set_vexpand(gl_area_widget, 1);
         c.gtk_widget_set_focusable(gl_area_widget, 1);

@@ -313,7 +313,9 @@ pub const CommandPalette = struct {
         // Search entry (commands/switcher mode)
         const entry = c.gtk_search_entry_new();
         c.gtk_widget_add_css_class(entry, "command-palette-entry");
-        c.gtk_search_entry_set_placeholder_text(@ptrCast(entry), "Type a command");
+        // GTK 4.8 compat: set_placeholder_text on GtkSearchEntry is 4.10+; set it
+        // on the internal GtkText editable delegate instead.
+        c.gtk_text_set_placeholder_text(@ptrCast(@alignCast(c.gtk_editable_get_delegate(@ptrCast(entry)))), "Type a command");
         c.gtk_box_append(@ptrCast(palette_box), entry);
 
         // Rename entry (hidden by default)
@@ -466,7 +468,7 @@ pub const CommandPalette = struct {
         self.showSearchUI();
         c.gtk_widget_set_visible(self.overlay, 1);
         c.gtk_editable_set_text(@ptrCast(self.entry), "");
-        c.gtk_search_entry_set_placeholder_text(@ptrCast(self.entry), "Search workspaces...");
+        c.gtk_text_set_placeholder_text(@ptrCast(@alignCast(c.gtk_editable_get_delegate(@ptrCast(self.entry)))), "Search workspaces...");
         self.updateResults("");
         _ = c.gtk_widget_grab_focus(self.entry);
     }
@@ -505,7 +507,7 @@ pub const CommandPalette = struct {
                 self.mode = .switcher;
                 self.showSearchUI();
                 c.gtk_editable_set_text(@ptrCast(self.entry), "");
-                c.gtk_search_entry_set_placeholder_text(@ptrCast(self.entry), "Search workspaces...");
+                c.gtk_text_set_placeholder_text(@ptrCast(@alignCast(c.gtk_editable_get_delegate(@ptrCast(self.entry)))), "Search workspaces...");
                 self.updateResults("");
                 _ = c.gtk_widget_grab_focus(self.entry);
             }
@@ -1330,9 +1332,9 @@ fn onSearchChanged(_: *c.GtkSearchEntry, user_data: c.gpointer) callconv(.c) voi
         palette.mode = new_mode;
         // Update placeholder
         if (new_mode == .commands) {
-            c.gtk_search_entry_set_placeholder_text(@ptrCast(palette.entry), "Type a command");
+            c.gtk_text_set_placeholder_text(@ptrCast(@alignCast(c.gtk_editable_get_delegate(@ptrCast(palette.entry)))), "Type a command");
         } else {
-            c.gtk_search_entry_set_placeholder_text(@ptrCast(palette.entry), "Search workspaces...");
+            c.gtk_text_set_placeholder_text(@ptrCast(@alignCast(c.gtk_editable_get_delegate(@ptrCast(palette.entry)))), "Search workspaces...");
         }
     }
 
