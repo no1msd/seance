@@ -72,3 +72,29 @@ LIBGL_ALWAYS_SOFTWARE=1 seance
 
 Note: panes only initialise once the compositor actually paints the window, so
 a purely headless session that never composites a frame won't start them.
+
+## Known warnings (benign)
+
+At startup you may see this logged once:
+
+```
+Adwaita-CRITICAL **: adw_tab_view_close_page: assertion 'page_belongs_to_this_view (self, page)' failed
+```
+
+It is **non-fatal and cosmetic** — the terminal pane spawns and renders normally.
+
+- **Source:** séance's stacked-mode layout. Each column defaults to stacked mode
+  on creation (`workspace.zig`), so `PaneGroup.enterStackedMode` immediately moves
+  the pane out of its `AdwTabView` by unparenting the widget directly (intentional —
+  it avoids an unrealize→realize cycle that would destroy the GLArea's GL context),
+  then closes the now child-less pages.
+- **Why it surfaces here:** on libadwaita 1.2, `adw_tab_view_close_page` rejects a
+  page whose child was unparented behind the view's back. libadwaita logs the
+  assertion and returns; the cleanup loop's guard then exits cleanly. Upstream
+  targets libadwaita 1.4+, where this path doesn't trip the assertion.
+- **Not introduced by this compatibility patch** — the stacked-mode code is
+  unchanged; only the older library is stricter.
+
+Left as-is intentionally: the safe-looking fixes would either reintroduce the
+GL-context loss the stacked-mode code is engineered to avoid, or the moved-widget
+disposal issue its comments describe.
