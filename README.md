@@ -119,6 +119,27 @@ zig build
 
 The binary is at `zig-out/bin/seance`.
 
+### Debian 12 (bookworm)
+
+Debian 12 ships GTK 4.8 and libadwaita 1.2, which are older than the versions
+above. This tree carries a compatibility layer (see
+[`packaging/debian12/`](packaging/debian12/)) that lets séance build against
+those older libraries, so on Debian 12 you can build straight from source — on
+**arm64** and amd64 — with one command:
+
+```bash
+git clone --recursive https://github.com/no1msd/seance.git
+cd seance
+./packaging/debian12/install.sh   # installs deps, fetches Zig, builds, installs to ~/.local/bin
+```
+
+> **VM / no GPU?** Ghostty's panes need an OpenGL context. Without accelerated
+> GL (e.g. `virtio-gpu` with no virglrenderer), force Mesa's software renderer:
+> `LIBGL_ALWAYS_SOFTWARE=1 seance`.
+
+See [`packaging/debian12/README.md`](packaging/debian12/README.md) for the full
+list of API substitutions and dependencies.
+
 ## Contributing
 
 Bug reports, feature requests, and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for how to file issues, build locally, and add support for new agents. Questions and show-and-tell go in [Discussions](https://github.com/no1msd/seance/discussions). Security issues should be reported privately, see [SECURITY.md](SECURITY.md).
