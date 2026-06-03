@@ -94,7 +94,9 @@ pub const WindowState = struct {
     port_scan_timer: c.guint = 0,
     command_palette: command_palette_mod.CommandPalette = undefined,
     toast_overlay: *c.GtkWidget = undefined,
-    banner: ?*c.GtkWidget = null,
+    banner: ?*c.GtkWidget = null, // GtkRevealer (1.2-compat replacement for AdwBanner)
+    banner_label: ?*c.GtkWidget = null, // GtkLabel inside the banner
+    banner_button: ?*c.GtkWidget = null, // optional action button inside the banner
     banner_is_config_error: bool = false,
     metadata_in_flight: bool = false,
     port_scan_in_flight: bool = false,
@@ -766,13 +768,13 @@ pub const WindowState = struct {
     pub fn renameWorkspace(self: *WindowState) void {
         const ws = self.activeWorkspace() orelse return;
 
-        const dialog = c.adw_alert_dialog_new("Rename Workspace", null);
-        c.adw_alert_dialog_add_response(@as(*c.AdwAlertDialog, @ptrCast(dialog)), "cancel", "Cancel");
-        c.adw_alert_dialog_add_response(@as(*c.AdwAlertDialog, @ptrCast(dialog)), "clear", "Clear");
-        c.adw_alert_dialog_add_response(@as(*c.AdwAlertDialog, @ptrCast(dialog)), "rename", "Rename");
-        c.adw_alert_dialog_set_response_appearance(@as(*c.AdwAlertDialog, @ptrCast(dialog)), "rename", c.ADW_RESPONSE_SUGGESTED);
-        c.adw_alert_dialog_set_default_response(@as(*c.AdwAlertDialog, @ptrCast(dialog)), "rename");
-        c.adw_alert_dialog_set_close_response(@as(*c.AdwAlertDialog, @ptrCast(dialog)), "cancel");
+        const dialog = c.adw_message_dialog_new(@ptrCast(@alignCast(self.gtk_window)), "Rename Workspace", null);
+        c.adw_message_dialog_add_response(@as(*c.AdwMessageDialog, @ptrCast(dialog)), "cancel", "Cancel");
+        c.adw_message_dialog_add_response(@as(*c.AdwMessageDialog, @ptrCast(dialog)), "clear", "Clear");
+        c.adw_message_dialog_add_response(@as(*c.AdwMessageDialog, @ptrCast(dialog)), "rename", "Rename");
+        c.adw_message_dialog_set_response_appearance(@as(*c.AdwMessageDialog, @ptrCast(dialog)), "rename", c.ADW_RESPONSE_SUGGESTED);
+        c.adw_message_dialog_set_default_response(@as(*c.AdwMessageDialog, @ptrCast(dialog)), "rename");
+        c.adw_message_dialog_set_close_response(@as(*c.AdwMessageDialog, @ptrCast(dialog)), "cancel");
 
         const entry = c.gtk_entry_new();
         c.gtk_entry_set_activates_default(@ptrCast(entry), 1);
@@ -782,7 +784,7 @@ pub const WindowState = struct {
         @memcpy(title_z[0..tlen], ws_title[0..tlen]);
         title_z[tlen] = 0;
         c.gtk_editable_set_text(@ptrCast(entry), &title_z);
-        c.adw_alert_dialog_set_extra_child(@as(*c.AdwAlertDialog, @ptrCast(dialog)), entry);
+        c.adw_message_dialog_set_extra_child(@as(*c.AdwMessageDialog, @ptrCast(dialog)), entry);
 
         const ctx = self.alloc.create(RenameDialogCtx) catch return;
         ctx.* = .{
@@ -792,7 +794,7 @@ pub const WindowState = struct {
         };
 
         _ = c.g_signal_connect_data(@as(c.gpointer, @ptrCast(dialog)), "response", @as(c.GCallback, @ptrCast(&onRenameResponse)), @ptrCast(ctx), null, 0);
-        c.adw_dialog_present(@as(*c.AdwDialog, @ptrCast(dialog)), self.gtk_window);
+        c.gtk_window_present(@ptrCast(@alignCast(dialog)));
 
         _ = c.gtk_widget_grab_focus(entry);
         c.gtk_editable_select_region(@ptrCast(entry), 0, -1);
@@ -828,13 +830,13 @@ pub const WindowState = struct {
         const group = ws.focusedGroup() orelse return;
         const pane = group.focusedTerminalPane() orelse return;
 
-        const dialog = c.adw_alert_dialog_new("Rename Tab", null);
-        c.adw_alert_dialog_add_response(@as(*c.AdwAlertDialog, @ptrCast(dialog)), "cancel", "Cancel");
-        c.adw_alert_dialog_add_response(@as(*c.AdwAlertDialog, @ptrCast(dialog)), "clear", "Clear");
-        c.adw_alert_dialog_add_response(@as(*c.AdwAlertDialog, @ptrCast(dialog)), "rename", "Rename");
-        c.adw_alert_dialog_set_response_appearance(@as(*c.AdwAlertDialog, @ptrCast(dialog)), "rename", c.ADW_RESPONSE_SUGGESTED);
-        c.adw_alert_dialog_set_default_response(@as(*c.AdwAlertDialog, @ptrCast(dialog)), "rename");
-        c.adw_alert_dialog_set_close_response(@as(*c.AdwAlertDialog, @ptrCast(dialog)), "cancel");
+        const dialog = c.adw_message_dialog_new(@ptrCast(@alignCast(self.gtk_window)), "Rename Tab", null);
+        c.adw_message_dialog_add_response(@as(*c.AdwMessageDialog, @ptrCast(dialog)), "cancel", "Cancel");
+        c.adw_message_dialog_add_response(@as(*c.AdwMessageDialog, @ptrCast(dialog)), "clear", "Clear");
+        c.adw_message_dialog_add_response(@as(*c.AdwMessageDialog, @ptrCast(dialog)), "rename", "Rename");
+        c.adw_message_dialog_set_response_appearance(@as(*c.AdwMessageDialog, @ptrCast(dialog)), "rename", c.ADW_RESPONSE_SUGGESTED);
+        c.adw_message_dialog_set_default_response(@as(*c.AdwMessageDialog, @ptrCast(dialog)), "rename");
+        c.adw_message_dialog_set_close_response(@as(*c.AdwMessageDialog, @ptrCast(dialog)), "cancel");
 
         const entry = c.gtk_entry_new();
         c.gtk_entry_set_activates_default(@ptrCast(entry), 1);
@@ -844,7 +846,7 @@ pub const WindowState = struct {
         @memcpy(title_z[0..tlen], display_title[0..tlen]);
         title_z[tlen] = 0;
         c.gtk_editable_set_text(@ptrCast(entry), &title_z);
-        c.adw_alert_dialog_set_extra_child(@as(*c.AdwAlertDialog, @ptrCast(dialog)), entry);
+        c.adw_message_dialog_set_extra_child(@as(*c.AdwMessageDialog, @ptrCast(dialog)), entry);
 
         const ctx = self.alloc.create(RenameTabDialogCtx) catch return;
         ctx.* = .{
@@ -854,7 +856,7 @@ pub const WindowState = struct {
         };
 
         _ = c.g_signal_connect_data(@as(c.gpointer, @ptrCast(dialog)), "response", @as(c.GCallback, @ptrCast(&onRenameTabResponse)), @ptrCast(ctx), null, 0);
-        c.adw_dialog_present(@as(*c.AdwDialog, @ptrCast(dialog)), self.gtk_window);
+        c.gtk_window_present(@ptrCast(@alignCast(dialog)));
 
         _ = c.gtk_widget_grab_focus(entry);
         c.gtk_editable_select_region(@ptrCast(entry), 0, -1);
@@ -1076,19 +1078,22 @@ pub const WindowState = struct {
 
     pub fn showBanner(self: *WindowState, message: [*:0]const u8, is_config_error: bool) void {
         const banner = self.banner orelse return;
-        c.adw_banner_set_title(@ptrCast(banner), message);
-        if (is_config_error) {
-            c.adw_banner_set_button_label(@ptrCast(banner), "Open Settings");
-        } else {
-            c.adw_banner_set_button_label(@ptrCast(banner), null);
+        if (self.banner_label) |label| c.gtk_label_set_text(@ptrCast(label), message);
+        if (self.banner_button) |btn| {
+            if (is_config_error) {
+                c.gtk_button_set_label(@ptrCast(btn), "Open Settings");
+                c.gtk_widget_set_visible(btn, 1);
+            } else {
+                c.gtk_widget_set_visible(btn, 0);
+            }
         }
         self.banner_is_config_error = is_config_error;
-        c.adw_banner_set_revealed(@ptrCast(banner), 1);
+        c.gtk_revealer_set_reveal_child(@ptrCast(banner), 1);
     }
 
     pub fn hideBanner(self: *WindowState) void {
         const banner = self.banner orelse return;
-        c.adw_banner_set_revealed(@ptrCast(banner), 0);
+        c.gtk_revealer_set_reveal_child(@ptrCast(banner), 0);
     }
 
     pub fn showOpenFolderDialog(self: *WindowState) void {
@@ -1182,10 +1187,12 @@ pub const WindowState = struct {
         _ = c.g_signal_connect_data(@ptrCast(hide_btn), "clicked", @ptrCast(&sidebar_mod.onSidebarHideClicked), @ptrCast(sidebar_ptr), null, 0);
         _ = c.g_signal_connect_data(@ptrCast(settings_btn), "clicked", @ptrCast(&sidebar_mod.onSettingsClicked), @ptrCast(sidebar_ptr), null, 0);
 
-        const toolbar_view = c.adw_toolbar_view_new();
-        c.adw_toolbar_view_add_top_bar(@as(*c.AdwToolbarView, @ptrCast(toolbar_view)), @ptrCast(header));
-        c.adw_toolbar_view_set_top_bar_style(@as(*c.AdwToolbarView, @ptrCast(toolbar_view)), c.ADW_TOOLBAR_FLAT);
-        c.adw_toolbar_view_set_content(@as(*c.AdwToolbarView, @ptrCast(toolbar_view)), self.banner_box);
+        // GTK 4.8 / libadwaita 1.2 compat: AdwToolbarView (1.4) is unavailable;
+        // a vertical GtkBox (header on top, content below) is the equivalent.
+        const toolbar_view = c.gtk_box_new(c.GTK_ORIENTATION_VERTICAL, 0);
+        c.gtk_box_append(@ptrCast(toolbar_view), @ptrCast(header));
+        c.gtk_widget_set_vexpand(self.banner_box, 1);
+        c.gtk_box_append(@ptrCast(toolbar_view), self.banner_box);
         c.adw_application_window_set_content(@ptrCast(window), toolbar_view);
 
         self.toolbar_view = @ptrCast(toolbar_view);
@@ -1258,7 +1265,7 @@ pub const WindowState = struct {
                 if (self.toolbar_view) |tv| {
                     // Detach banner_box from the toolbar_view first so it
                     // isn't destroyed along with it.
-                    c.adw_toolbar_view_set_content(@as(*c.AdwToolbarView, @ptrCast(tv)), null);
+                    c.gtk_box_remove(@ptrCast(tv), self.banner_box);
                 }
                 c.adw_application_window_set_content(@ptrCast(self.gtk_window), null);
                 self.toolbar_view = null;
@@ -1447,14 +1454,39 @@ pub fn create(wm: *WindowManager) !*WindowState {
     c.adw_toast_overlay_set_child(@ptrCast(toast_overlay), window_overlay);
     state.toast_overlay = toast_overlay;
 
-    // Error banner (hidden by default, revealed on config/session errors)
-    const banner = c.adw_banner_new("");
-    c.adw_banner_set_revealed(@ptrCast(banner), 0);
+    // Error banner (hidden by default, revealed on config/session errors).
+    // GTK 4.8 / libadwaita 1.2 compat: AdwBanner (1.4) is unavailable, so build
+    // an equivalent from a GtkRevealer wrapping a label + optional action button.
+    const banner = c.gtk_revealer_new();
+    c.gtk_revealer_set_transition_type(@ptrCast(banner), c.GTK_REVEALER_TRANSITION_TYPE_SLIDE_DOWN);
+    c.gtk_revealer_set_reveal_child(@ptrCast(banner), 0);
+
+    const banner_inner = c.gtk_box_new(c.GTK_ORIENTATION_HORIZONTAL, 6);
+    c.gtk_widget_add_css_class(banner_inner, "app-notification");
+    c.gtk_widget_set_margin_start(banner_inner, 12);
+    c.gtk_widget_set_margin_end(banner_inner, 12);
+    c.gtk_widget_set_margin_top(banner_inner, 6);
+    c.gtk_widget_set_margin_bottom(banner_inner, 6);
+
+    const banner_label = c.gtk_label_new("");
+    c.gtk_widget_set_hexpand(banner_label, 1);
+    c.gtk_label_set_xalign(@ptrCast(banner_label), 0);
+    c.gtk_label_set_wrap(@ptrCast(banner_label), 1);
+    c.gtk_box_append(@ptrCast(banner_inner), banner_label);
+
+    const banner_button = c.gtk_button_new_with_label("");
+    c.gtk_widget_set_valign(banner_button, c.GTK_ALIGN_CENTER);
+    c.gtk_widget_set_visible(banner_button, 0);
+    c.gtk_box_append(@ptrCast(banner_inner), banner_button);
+
+    c.gtk_revealer_set_child(@ptrCast(banner), banner_inner);
     state.banner = @ptrCast(banner);
+    state.banner_label = @ptrCast(banner_label);
+    state.banner_button = @ptrCast(banner_button);
 
     _ = c.g_signal_connect_data(
-        @as(c.gpointer, @ptrCast(banner)),
-        "button-clicked",
+        @as(c.gpointer, @ptrCast(banner_button)),
+        "clicked",
         @as(c.GCallback, @ptrCast(&onBannerButtonClicked)),
         @as(c.gpointer, @ptrCast(state)),
         null,
@@ -1618,18 +1650,18 @@ fn showCloseConfirmation(state: *WindowState) void {
     const title: [*:0]const u8 = if (is_last) "Quit Seance?" else "Close window?";
     const confirm_label: [*:0]const u8 = if (is_last) "Quit" else "Close Window";
 
-    const dialog = c.adw_alert_dialog_new(title, &msg_buf);
-    c.adw_alert_dialog_add_response(@as(*c.AdwAlertDialog, @ptrCast(dialog)), "cancel", "Cancel");
-    c.adw_alert_dialog_add_response(@as(*c.AdwAlertDialog, @ptrCast(dialog)), "close", confirm_label);
-    c.adw_alert_dialog_set_response_appearance(@as(*c.AdwAlertDialog, @ptrCast(dialog)), "close", c.ADW_RESPONSE_DESTRUCTIVE);
-    c.adw_alert_dialog_set_default_response(@as(*c.AdwAlertDialog, @ptrCast(dialog)), "cancel");
-    c.adw_alert_dialog_set_close_response(@as(*c.AdwAlertDialog, @ptrCast(dialog)), "cancel");
+    const dialog = c.adw_message_dialog_new(@ptrCast(@alignCast(state.gtk_window)), title, &msg_buf);
+    c.adw_message_dialog_add_response(@as(*c.AdwMessageDialog, @ptrCast(dialog)), "cancel", "Cancel");
+    c.adw_message_dialog_add_response(@as(*c.AdwMessageDialog, @ptrCast(dialog)), "close", confirm_label);
+    c.adw_message_dialog_set_response_appearance(@as(*c.AdwMessageDialog, @ptrCast(dialog)), "close", c.ADW_RESPONSE_DESTRUCTIVE);
+    c.adw_message_dialog_set_default_response(@as(*c.AdwMessageDialog, @ptrCast(dialog)), "cancel");
+    c.adw_message_dialog_set_close_response(@as(*c.AdwMessageDialog, @ptrCast(dialog)), "cancel");
 
     _ = c.g_signal_connect_data(@as(c.gpointer, @ptrCast(dialog)), "response", @as(c.GCallback, @ptrCast(&onCloseWindowResponse)), @ptrCast(state), null, 0);
-    c.adw_dialog_present(@as(*c.AdwDialog, @ptrCast(dialog)), state.gtk_window);
+    c.gtk_window_present(@ptrCast(@alignCast(dialog)));
 }
 
-fn onCloseWindowResponse(_: *c.AdwAlertDialog, response: [*:0]const u8, data: c.gpointer) callconv(.c) void {
+fn onCloseWindowResponse(_: *c.AdwMessageDialog, response: [*:0]const u8, data: c.gpointer) callconv(.c) void {
     if (!std.mem.eql(u8, std.mem.sliceTo(response, 0), "close")) return;
     const state: *WindowState = @ptrCast(@alignCast(data));
     state.window_manager.closeWindow(state);
@@ -1662,18 +1694,18 @@ fn showQuitConfirmation(state: *WindowState) void {
         _ = std.fmt.bufPrint(&msg_buf, "{d} workspaces will be saved and restored next launch.", .{ws_total}) catch {};
     }
 
-    const dialog = c.adw_alert_dialog_new("Quit Seance?", &msg_buf);
-    c.adw_alert_dialog_add_response(@as(*c.AdwAlertDialog, @ptrCast(dialog)), "cancel", "Cancel");
-    c.adw_alert_dialog_add_response(@as(*c.AdwAlertDialog, @ptrCast(dialog)), "quit", "Quit");
-    c.adw_alert_dialog_set_response_appearance(@as(*c.AdwAlertDialog, @ptrCast(dialog)), "quit", c.ADW_RESPONSE_DESTRUCTIVE);
-    c.adw_alert_dialog_set_default_response(@as(*c.AdwAlertDialog, @ptrCast(dialog)), "cancel");
-    c.adw_alert_dialog_set_close_response(@as(*c.AdwAlertDialog, @ptrCast(dialog)), "cancel");
+    const dialog = c.adw_message_dialog_new(@ptrCast(@alignCast(state.gtk_window)), "Quit Seance?", &msg_buf);
+    c.adw_message_dialog_add_response(@as(*c.AdwMessageDialog, @ptrCast(dialog)), "cancel", "Cancel");
+    c.adw_message_dialog_add_response(@as(*c.AdwMessageDialog, @ptrCast(dialog)), "quit", "Quit");
+    c.adw_message_dialog_set_response_appearance(@as(*c.AdwMessageDialog, @ptrCast(dialog)), "quit", c.ADW_RESPONSE_DESTRUCTIVE);
+    c.adw_message_dialog_set_default_response(@as(*c.AdwMessageDialog, @ptrCast(dialog)), "cancel");
+    c.adw_message_dialog_set_close_response(@as(*c.AdwMessageDialog, @ptrCast(dialog)), "cancel");
 
     _ = c.g_signal_connect_data(@as(c.gpointer, @ptrCast(dialog)), "response", @as(c.GCallback, @ptrCast(&onQuitResponse)), @ptrCast(state), null, 0);
-    c.adw_dialog_present(@as(*c.AdwDialog, @ptrCast(dialog)), state.gtk_window);
+    c.gtk_window_present(@ptrCast(@alignCast(dialog)));
 }
 
-fn onQuitResponse(_: *c.AdwAlertDialog, response: [*:0]const u8, data: c.gpointer) callconv(.c) void {
+fn onQuitResponse(_: *c.AdwMessageDialog, response: [*:0]const u8, data: c.gpointer) callconv(.c) void {
     if (!std.mem.eql(u8, std.mem.sliceTo(response, 0), "quit")) return;
     const state: *WindowState = @ptrCast(@alignCast(data));
     triggerQuit(state.window_manager);
@@ -2008,7 +2040,7 @@ const RenameDialogCtx = struct {
     entry: *c.GtkEditable,
 };
 
-fn onRenameResponse(_: *c.AdwAlertDialog, response: [*:0]const u8, data: c.gpointer) callconv(.c) void {
+fn onRenameResponse(_: *c.AdwMessageDialog, response: [*:0]const u8, data: c.gpointer) callconv(.c) void {
     const ctx: *RenameDialogCtx = @ptrCast(@alignCast(data));
     const resp = std.mem.sliceTo(response, 0);
 
@@ -2048,7 +2080,7 @@ const RenameTabDialogCtx = struct {
     entry: *c.GtkEditable,
 };
 
-fn onRenameTabResponse(_: *c.AdwAlertDialog, response: [*:0]const u8, data: c.gpointer) callconv(.c) void {
+fn onRenameTabResponse(_: *c.AdwMessageDialog, response: [*:0]const u8, data: c.gpointer) callconv(.c) void {
     const ctx: *RenameTabDialogCtx = @ptrCast(@alignCast(data));
     const resp = std.mem.sliceTo(response, 0);
 
@@ -2309,10 +2341,10 @@ fn loadThemeCss() void {
     css_buf[pos] = 0;
 
     if (css_provider_global) |provider| {
-        c.gtk_css_provider_load_from_string(provider, @ptrCast(&css_buf));
+        c.gtk_css_provider_load_from_data(provider, @ptrCast(&css_buf), -1);
     } else {
         const provider = c.gtk_css_provider_new();
-        c.gtk_css_provider_load_from_string(provider, @ptrCast(&css_buf));
+        c.gtk_css_provider_load_from_data(provider, @ptrCast(&css_buf), -1);
         c.gtk_style_context_add_provider_for_display(
             c.gdk_display_get_default(),
             @ptrCast(provider),

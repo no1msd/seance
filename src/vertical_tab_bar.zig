@@ -329,10 +329,10 @@ pub const VerticalTabBar = struct {
             const css = std.fmt.bufPrintZ(&css_buf, ".vtab-color-bar {{ background-color: {s}; }}", .{hex}) catch return;
 
             if (tab.color_bar_provider) |provider| {
-                c.gtk_css_provider_load_from_string(provider, css.ptr);
+                c.gtk_css_provider_load_from_data(provider, css.ptr, -1);
             } else {
                 const provider = c.gtk_css_provider_new();
-                c.gtk_css_provider_load_from_string(provider, css.ptr);
+                c.gtk_css_provider_load_from_data(provider, css.ptr, -1);
                 const ctx = c.gtk_widget_get_style_context(tab.color_bar);
                 c.gtk_style_context_add_provider(ctx, @ptrCast(provider), c.GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
                 tab.color_bar_provider = provider;
