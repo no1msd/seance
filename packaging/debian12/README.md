@@ -59,11 +59,16 @@ renderer in that case:
 LIBGL_ALWAYS_SOFTWARE=1 seance
 ```
 
-## Verified
+## Verified (Debian 12 arm64)
 
-- Builds cleanly from source (libghostty + séance) on Debian 12 arm64.
+- Builds cleanly from source (libghostty + séance).
 - Launches; `seance ctl ping` → `pong`; `seance ctl tree` / `identify` work.
-- OpenGL context succeeds (software renderer in the virtio-gpu test VM).
+- OpenGL context succeeds (software renderer on the virtio-gpu test VM).
+- **Interactive pane rendering confirmed.** Against a painting display, the
+  `GtkGLArea` renders and ghostty spawns the pane's shell: a live `sh` child
+  process and pty appear, the pane title tracks the shell prompt
+  (`debian@debian: ~`), and the header bar, sidebar, and terminal all draw
+  correctly.
 
-Interactive terminal rendering should be confirmed on a real desktop session —
-the panes only initialise once the compositor maps and paints the window.
+Note: panes only initialise once the compositor actually paints the window, so
+a purely headless session that never composites a frame won't start them.
