@@ -6,6 +6,6 @@ Icon=com.seance.app
 Terminal=false
 Type=Application
 Categories=System;TerminalEmulator;
-Keywords=terminal;multiplexer;shell;console;
+Keywords=terminal;multiplexer;shell;console;seance;
 StartupNotify=true
 StartupWMClass=com.seance.app
