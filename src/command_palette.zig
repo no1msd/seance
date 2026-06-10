@@ -117,6 +117,7 @@ const static_commands = [_]Command{
     .{ .label = "Jump to Unread", .action = .jump_to_unread, .keywords = "jump unread notification" },
     .{ .label = "Open Settings", .action = .open_settings, .keywords = "settings preferences config options" },
     .{ .label = "Reload Configuration", .action = .reload_config, .keywords = "config reload refresh settings" },
+    .{ .label = "Toggle Fullscreen", .action = .toggle_fullscreen, .keywords = "fullscreen toggle window maximize f11" },
     .{ .label = "Quit Seance", .action = .quit_app, .keywords = "quit exit close application app shutdown" },
 
     // Workspace commands

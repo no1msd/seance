@@ -73,6 +73,7 @@ pub const Action = enum(u8) {
 
     // Window
     new_window,
+    toggle_fullscreen,
     quit_app,
 
     // Command palette
@@ -260,6 +261,7 @@ fn initDefaults() void {
 
     // Window
     set(.new_window, .{ .key = c.GDK_KEY_N, .ctrl = true, .shift = true });
+    set(.toggle_fullscreen, .{ .key = c.GDK_KEY_F11 });
     set(.quit_app, .{ .key = c.GDK_KEY_Q, .ctrl = true, .shift = true });
 
     // Command palette
@@ -547,6 +549,7 @@ pub fn executeAction(action: Action, state: *Window.WindowState) c.gboolean {
         .new_window => {
             _ = state.window_manager.newWindow();
         },
+        .toggle_fullscreen => state.toggleFullscreen(),
         .quit_app => state.quitApp(),
 
         // Command palette
