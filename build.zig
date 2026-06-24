@@ -261,6 +261,13 @@ pub fn build(b: *std.Build) void {
         });
     }
 
+    // Install OpenCode plugin for agent integration
+    b.getInstallStep().dependOn(&b.addInstallFileWithDir(
+        b.path("plugins/seance-opencode/index.ts"),
+        .prefix,
+        "share/seance/opencode-plugin.ts",
+    ).step);
+
     const run_cmd = b.addRunArtifact(exe);
     run_cmd.step.dependOn(b.getInstallStep());
     if (b.args) |args| {

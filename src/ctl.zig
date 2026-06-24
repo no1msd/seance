@@ -143,6 +143,7 @@ fn dispatch(ctx: Ctx, command: []const u8) u8 {
     if (eql(command, "claude-hook")) return cmdClaudeHook(ctx);
     if (eql(command, "codex-hook")) return cmdCodexHook(ctx);
     if (eql(command, "pi-hook")) return cmdPiHook(ctx);
+    if (eql(command, "opencode-hook")) return cmdOpencodeHook(ctx);
     if (eql(command, "help") or eql(command, "--help") or eql(command, "-h")) {
         printUsage();
         return 0;
@@ -1179,6 +1180,7 @@ const AgentConfig = struct {
     has_ask_user_handling: bool,
     has_notification_hook: bool,
     has_post_tool_hook: bool,
+    clear_status_on_end: bool,
     session_dir_env: ?[]const u8,
 };
 
@@ -1193,6 +1195,7 @@ const claude_agent = AgentConfig{
     .has_ask_user_handling = true,
     .has_notification_hook = true,
     .has_post_tool_hook = false,
+    .clear_status_on_end = true,
     .session_dir_env = null,
 };
 
@@ -1207,6 +1210,7 @@ const codex_agent = AgentConfig{
     .has_ask_user_handling = false,
     .has_notification_hook = false,
     .has_post_tool_hook = true,
+    .clear_status_on_end = true,
     .session_dir_env = "SEANCE_CODEX_SESSION_DIR",
 };
 
@@ -1221,7 +1225,23 @@ const pi_agent = AgentConfig{
     .has_ask_user_handling = false,
     .has_notification_hook = false,
     .has_post_tool_hook = true,
+    .clear_status_on_end = true,
     .session_dir_env = "SEANCE_PI_SESSION_DIR",
+};
+
+const opencode_agent = AgentConfig{
+    .name = "OpenCode",
+    .display_name = "OpenCode",
+    .usage = "usage: opencode-hook <session-start|session-end|prompt-submit|pre-tool-use|post-tool-use|stop|notification>\n",
+    .pid_env = "SEANCE_OPENCODE_PID",
+    .response = "OK\n",
+    .status_key_prefix = "opencode",
+    .status_key_mode = .surface,
+    .has_ask_user_handling = true,
+    .has_notification_hook = true,
+    .has_post_tool_hook = true,
+    .clear_status_on_end = true,
+    .session_dir_env = "SEANCE_OPENCODE_SESSION_DIR",
 };
 
 fn cmdClaudeHook(ctx: Ctx) u8 {
@@ -1234,6 +1254,10 @@ fn cmdCodexHook(ctx: Ctx) u8 {
 
 fn cmdPiHook(ctx: Ctx) u8 {
     return cmdAgentHook(ctx, pi_agent);
+}
+
+fn cmdOpencodeHook(ctx: Ctx) u8 {
+    return cmdAgentHook(ctx, opencode_agent);
 }
 
 const HookCtx = struct {
@@ -1520,10 +1544,12 @@ fn agentHookSessionEnd(h: HookCtx) u8 {
     if (h.session_id) |sid| {
         _ = h.store.consume(sid);
     }
-    if (h.workspace) |ws| {
-        const sk = jsonEscapeAlloc(h.alloc, h.getStatusKey());
-        const cp = std.fmt.allocPrint(h.alloc, "{{\"workspace_id\":{d},\"key\":\"{s}\"}}", .{ ws, sk }) catch null;
-        _ = apiCall(h.alloc, h.socket_path, "workspace.clear_status", cp) catch {};
+    if (h.agent.clear_status_on_end) {
+        if (h.workspace) |ws| {
+            const sk = jsonEscapeAlloc(h.alloc, h.getStatusKey());
+            const cp = std.fmt.allocPrint(h.alloc, "{{\"workspace_id\":{d},\"key\":\"{s}\"}}", .{ ws, sk }) catch null;
+            _ = apiCall(h.alloc, h.socket_path, "workspace.clear_status", cp) catch {};
+        }
     }
 
     if (h.agent.session_dir_env) |env_name| {
@@ -2107,8 +2133,12 @@ fn printUsage() void {
         \\
         \\Codex CLI Hooks:
         \\  codex-hook <event>      Handle Codex CLI lifecycle event
-        \\    Events: session-start, session-end, prompt-submit,
+        \\\    Events: session-start, session-end, prompt-submit,
         \\            pre-tool-use, post-tool-use, stop
         \\
+        \\OpenCode Hooks:
+        \\  opencode-hook <event>   Handle OpenCode lifecycle event
+        \\    Events: session-start, session-end, prompt-submit,
+        \\            pre-tool-use, post-tool-use, stop, notification
     );
 }

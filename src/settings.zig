@@ -40,6 +40,7 @@ const Widgets = struct {
     claude_code_hooks: ?*c.GtkWidget = null,
     codex_hooks: ?*c.GtkWidget = null,
     pi_hooks: ?*c.GtkWidget = null,
+    opencode_hooks: ?*c.GtkWidget = null,
 
     // Combos
     notification_sound: ?*c.GtkWidget = null,
@@ -437,6 +438,7 @@ fn buildIntegrationsSection(page: *c.GtkWidget, cfg: *const config_mod.Config) v
     w.claude_code_hooks = addSwitchRow(g2, "Claude Code Integration", if (cfg.claude_code_hooks) "Sidebar shows Claude session status and notifications." else "Claude Code runs without seance integration.", cfg.claude_code_hooks);
     w.codex_hooks = addSwitchRow(g2, "Codex Integration", if (cfg.codex_hooks) "Sidebar shows Codex session status and notifications." else "Codex runs without seance integration.", cfg.codex_hooks);
     w.pi_hooks = addSwitchRow(g2, "Pi Agent Integration", if (cfg.pi_hooks) "Sidebar shows Pi session status and notifications." else "Pi runs without seance integration.", cfg.pi_hooks);
+    w.opencode_hooks = addSwitchRow(g2, "OpenCode Integration", if (cfg.opencode_hooks) "Sidebar shows OpenCode session status and notifications." else "OpenCode runs without seance integration.", cfg.opencode_hooks);
     addToPage(page, g2);
 
     // Card 3: Port Configuration
@@ -688,6 +690,8 @@ fn onSwitchChanged(obj: *c.GObject, _: *c.GParamSpec, _: c.gpointer) callconv(.c
         cfg.codex_hooks = active;
     } else if (widget == w.pi_hooks) {
         cfg.pi_hooks = active;
+    } else if (widget == w.opencode_hooks) {
+        cfg.opencode_hooks = active;
     } else return;
 
     saveAndReload();

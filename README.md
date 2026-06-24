@@ -24,7 +24,7 @@
 
 ## Why Séance?
 
-Séance is a GTK4 terminal multiplexer for Linux. It auto-detects [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [Codex](https://github.com/openai/codex), and [Pi](https://github.com/badlogic/pi-mono) sessions running inside it and tracks their status (working, waiting for permission, idle) live in the sidebar. Permission requests and task completions are surfaced as desktop notifications with unread tracking. Zero configuration, no dotfile edits: open an agent in a pane and it is tracked.
+Séance is a GTK4 terminal multiplexer for Linux. It auto-detects [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [Codex](https://github.com/openai/codex), [Pi](https://github.com/badlogic/pi-mono), and [OpenCode](https://opencode.ai) sessions running inside it and tracks their status (working, waiting for permission, idle) live in the sidebar. Permission requests and task completions are surfaced as desktop notifications with unread tracking. Zero configuration, no dotfile edits: open an agent in a pane and it is tracked.
 
 ### Linux-native, not Electron
 
@@ -36,7 +36,7 @@ Panes are arranged in a horizontal strip that you scroll through, borrowing the 
 
 ### Agent-agnostic
 
-Claude Code, Codex, and Pi are auto-tracked out of the box. Adding support for another agent is a hook config PR rather than a rewrite. Agents that do not speak hooks still get all the plain multiplexer features.
+Claude Code, Codex, Pi, and OpenCode are auto-tracked out of the box. Adding support for another agent is a hook config PR rather than a rewrite. Agents that do not speak hooks still get all the plain multiplexer features.
 
 ### Scriptable
 
@@ -111,6 +111,14 @@ mv seance-*-x86_64.AppImage ~/.local/bin/seance
 
 Requires Zig **0.15.2+**, GTK4, libadwaita, OpenGL 4.3+, and Linux (X11 or Wayland).
 
+**Install build dependencies (Ubuntu/Debian):**
+
+```bash
+sudo apt install pkg-config libgtk-4-dev libadwaita-1-dev libnotify-dev libcanberra-dev
+```
+
+**Build:**
+
 ```bash
 git clone --recursive https://github.com/no1msd/seance.git
 cd seance
@@ -118,6 +126,15 @@ zig build
 ```
 
 The binary is at `zig-out/bin/seance`.
+
+## Agent Integrations
+
+Claude Code, Codex, Pi, and OpenCode are all tracked automatically — no setup required.
+
+- **Claude Code, Codex, Pi**: Séance installs wrapper scripts that intercept calls to these agents and inject lifecycle hooks transparently.
+- **OpenCode**: On first launch, Séance auto-installs a plugin to `~/.config/opencode/plugins/` if the OpenCode config directory exists.
+
+To disable OpenCode integration: **Settings → Terminal → OpenCode Integration**, or set `opencode-hooks = false` in `~/.config/seance/config.toml`.
 
 ## Contributing
 

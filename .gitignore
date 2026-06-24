@@ -2,3 +2,6 @@ zig-out/
 .zig-cache/
 plans
 campaign/
+zig-pkg/
+AppDir/
+*.AppImage

@@ -764,6 +764,10 @@ fn initSurface(pane: *Pane, width: u32, height: u32) void {
         env_vars[env_count] = .{ .key = "SEANCE_PI_HOOKS_DISABLED", .value = "1" };
         env_count += 1;
     }
+    if (!cfg.opencode_hooks) {
+        env_vars[env_count] = .{ .key = "SEANCE_OPENCODE_HOOKS_DISABLED", .value = "1" };
+        env_count += 1;
+    }
     env_vars[env_count] = .{ .key = "SEANCE_SHELL_INTEGRATION", .value = "1" };
     env_count += 1;
     env_vars[env_count] = .{ .key = "TERM_PROGRAM", .value = "ghostty" };

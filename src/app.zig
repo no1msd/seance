@@ -13,6 +13,82 @@ const kde_decoration = @import("kde_decoration.zig");
 
 const is_linux = builtin.os.tag == .linux;
 
+/// Auto-install OpenCode plugin if OpenCode config dir exists but plugin is missing.
+fn installOpenCodePlugin() void {
+    const home = std.posix.getenv("HOME") orelse return;
+    const alloc = std.heap.page_allocator;
+    const config_dir_path = std.fmt.allocPrint(alloc, "{s}/.config/opencode", .{home}) catch return;
+    defer alloc.free(config_dir_path);
+    _ = std.fs.openDirAbsolute(config_dir_path, .{}) catch return; // no opencode config dir → not installed
+
+    // Read bundled plugin
+    const bundled_path = blk: {
+        var exe_buf: [std.fs.max_path_bytes]u8 = undefined;
+        const exe_path = std.fs.selfExePath(&exe_buf) catch return;
+        const exe_dir = std.fs.path.dirname(exe_path) orelse return;
+        const prefix = std.fs.path.dirname(exe_dir) orelse return;
+        break :blk std.fmt.allocPrint(alloc, "{s}/share/seance/opencode-plugin.ts", .{prefix}) catch return;
+    };
+    defer alloc.free(bundled_path);
+
+    const bundled_file = std.fs.openFileAbsolute(bundled_path, .{}) catch {
+        std.log.info("opencode: plugin source not found, skipping", .{});
+        return;
+    };
+    defer bundled_file.close();
+    const bundled_content = bundled_file.readToEndAlloc(alloc, 64 * 1024) catch return;
+    defer alloc.free(bundled_content);
+
+    const bundled_version = extractVersion(bundled_content);
+
+    // Check if installed plugin exists
+    const plugin_path = std.fmt.allocPrint(alloc, "{s}/.config/opencode/plugins/seance-opencode.ts", .{home}) catch return;
+    defer alloc.free(plugin_path);
+
+    const installed_file = std.fs.openFileAbsolute(plugin_path, .{}) catch null;
+    const installed_content = if (installed_file) |f| f.readToEndAlloc(alloc, 64 * 1024) catch null else null;
+    defer if (installed_file) |f| f.close();
+    defer if (installed_content) |ic| alloc.free(ic);
+
+    if (installed_content) |content| {
+        const installed_version = extractVersion(content);
+        const identical = content.len == bundled_content.len and std.mem.eql(u8, content, bundled_content);
+        if (installed_version == bundled_version and identical) return; // already in sync
+        std.log.info("opencode: syncing plugin v{} → v{}", .{ installed_version, bundled_version });
+    } else {
+        ensurePluginDir(home) catch return;
+        std.log.info("opencode: installing plugin v{}", .{bundled_version});
+    }
+
+    const tmp_path = std.fmt.allocPrint(alloc, "{s}.tmp", .{plugin_path}) catch return;
+    defer alloc.free(tmp_path);
+    const dst = std.fs.createFileAbsolute(tmp_path, .{}) catch return;
+    errdefer std.fs.deleteFileAbsolute(tmp_path) catch {};
+    _ = dst.writeAll(bundled_content) catch return;
+    std.fs.renameAbsolute(tmp_path, plugin_path) catch return;
+}
+
+fn extractVersion(content: []const u8) u32 {
+    // Look for "// @seance-version N" in first 256 bytes
+    const header = if (content.len > 256) content[0..256] else content;
+    if (std.mem.indexOf(u8, header, "@seance-version")) |idx| {
+        const rest = header[idx + 16 ..];
+        var end: usize = 0;
+        while (end < rest.len and rest[end] >= '0' and rest[end] <= '9') : (end += 1) {}
+        if (end > 0) return std.fmt.parseInt(u32, rest[0..end], 10) catch 0;
+    }
+    return 0;
+}
+
+fn ensurePluginDir(home: []const u8) !void {
+    const alloc = std.heap.page_allocator;
+    const plugins_dir = try std.fmt.allocPrint(alloc, "{s}/.config/opencode/plugins", .{home});
+    defer alloc.free(plugins_dir);
+    std.fs.makeDirAbsolute(plugins_dir) catch |err| {
+        if (err != error.PathAlreadyExists) return;
+    };
+}
+
 var wm: ?*WindowManager = null;
 var server: socket_server.SocketServer = .{};
 pub var shutting_down: bool = false;
@@ -60,6 +136,11 @@ fn onActivate(app: *c.AdwApplication) callconv(.c) void {
 
         // Load config before initializing ghostty so theme/font settings are available
         _ = config_mod.load();
+
+        // Auto-install OpenCode plugin if OpenCode is present
+        if (config_mod.get().opencode_hooks) {
+            installOpenCodePlugin();
+        }
 
         // Set libadwaita to follow system dark/light, preferring dark when
         // the system has no opinion (or on non-Linux platforms).

@@ -63,6 +63,9 @@ pub const Config = struct {
     // Pi Agent integration
     pi_hooks: bool = true,
 
+    // OpenCode integration
+    opencode_hooks: bool = true,
+
     // Notifications
     notification_sound: NotificationSound = .default,
 
@@ -269,6 +272,7 @@ pub fn saveConfig(cfg: *const Config) void {
     writeBool(w, "claude-code-hooks", cfg.claude_code_hooks) catch return;
     writeBool(w, "codex-hooks", cfg.codex_hooks) catch return;
     writeBool(w, "pi-hooks", cfg.pi_hooks) catch return;
+    writeBool(w, "opencode-hooks", cfg.opencode_hooks) catch return;
 
     // [notifications]
     w.print("\n[notifications]\n", .{}) catch return;
@@ -452,6 +456,8 @@ fn applyValue(config: *Config, section: []const u8, key: []const u8, raw_val: []
             config.codex_hooks = parseBool(val) orelse config.codex_hooks; return true;
         } else if (eql(key, "pi-hooks")) {
             config.pi_hooks = parseBool(val) orelse config.pi_hooks; return true;
+        } else if (eql(key, "opencode-hooks")) {
+            config.opencode_hooks = parseBool(val) orelse config.opencode_hooks; return true;
         }
     } else if (eql(section, "notifications")) {
         if (eql(key, "sound")) {
