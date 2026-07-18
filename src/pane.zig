@@ -911,6 +911,25 @@ fn addSidedMods(mods: *c_uint, keyval: c.guint, is_release: bool) void {
     }
 }
 
+fn syncImCursorLocation(pane: *Pane) void {
+    const ctx = pane.im_context orelse return;
+    const surface = pane.surface orelse return;
+
+    var x: f64 = 0;
+    var y: f64 = 0;
+    var width: f64 = 1;
+    var height: f64 = 1;
+    c.ghostty_surface_ime_point(surface, &x, &y, &width, &height);
+
+    const rect = c.GdkRectangle{
+        .x = @intFromFloat(x),
+        .y = @intFromFloat(y),
+        .width = @max(@as(c.gint, 1), @as(c.gint, @intFromFloat(width))),
+        .height = @max(@as(c.gint, 1), @as(c.gint, @intFromFloat(height))),
+    };
+    c.gtk_im_context_set_cursor_location(@ptrCast(ctx), &rect);
+}
+
 fn onKeyPressed(
     controller: *c.GtkEventControllerKey,
     keyval: c.guint,
@@ -950,6 +969,7 @@ fn handleKeyEvent(
         pane.in_keyevent = ime_state.beginKeyEvent(pane.im_composing);
         defer pane.in_keyevent = .none;
 
+        syncImCursorLocation(pane);
         const im_handled = c.gtk_im_context_filter_keypress(@ptrCast(ctx), event) != 0;
 
         if (ime_state.filterDecision(im_handled, pane.im_composing, pane.in_keyevent, pane.im_len) == .consume) {
@@ -1121,6 +1141,7 @@ fn onMousePress(
     const mods = translateMods(gtk_mods);
 
     _ = c.ghostty_surface_mouse_button(surface, c.GHOSTTY_MOUSE_PRESS, button, mods);
+    syncImCursorLocation(pane);
 }
 
 fn onMouseRelease(
@@ -1140,6 +1161,7 @@ fn onMouseRelease(
     const mods = translateMods(gtk_mods);
 
     _ = c.ghostty_surface_mouse_button(surface, c.GHOSTTY_MOUSE_RELEASE, button, mods);
+    syncImCursorLocation(pane);
 }
 
 fn onScroll(
