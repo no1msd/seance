@@ -3,6 +3,7 @@ const c = @import("c.zig").c;
 const config_mod = @import("config.zig");
 const SearchOverlay = @import("search_overlay.zig").SearchOverlay;
 const ghostty_bridge = @import("ghostty_bridge.zig");
+const ime_state = @import("ime_state.zig");
 
 pub const Pane = struct {
     pub const cwd_cap = 512;
@@ -24,9 +25,10 @@ pub const Pane = struct {
     // IME state
     im_context: ?*c.GtkIMContext = null,
     im_composing: bool = false,
-    im_buf: [32]u8 = undefined,
+    im_focused: bool = false,
+    im_buf: [256]u8 = undefined,
     im_len: usize = 0,
-    in_keyevent: bool = false,
+    in_keyevent: ime_state.InKeyEvent = .none,
     surface_initialized: bool = false,
     pending_init_width: u32 = 0,
     pending_init_height: u32 = 0,
@@ -221,6 +223,7 @@ pub const Pane = struct {
         if (self.gl_area) |gl| {
             _ = c.gtk_widget_grab_focus(@as(*c.GtkWidget, @ptrCast(gl)));
         }
+        self.focusImContext();
         c.gtk_widget_remove_css_class(self.widget, "pane-unfocused");
         c.gtk_widget_add_css_class(self.widget, "pane-focused");
 
@@ -243,6 +246,7 @@ pub const Pane = struct {
     }
 
     pub fn unfocus(self: *Pane) void {
+        self.unfocusImContext();
         c.gtk_widget_remove_css_class(self.widget, "pane-focused");
         if (self.surface) |s| {
             c.ghostty_surface_set_focus(s, false);
@@ -252,6 +256,29 @@ pub const Pane = struct {
         } else {
             c.gtk_widget_add_css_class(self.widget, "pane-unfocused");
         }
+    }
+
+    fn focusImContext(self: *Pane) void {
+        if (self.im_focused) return;
+        const ctx = self.im_context orelse return;
+        if (self.gl_area) |gl| {
+            c.gtk_im_context_set_client_widget(@ptrCast(ctx), @as(*c.GtkWidget, @ptrCast(gl)));
+        }
+        c.gtk_im_context_focus_in(@ptrCast(ctx));
+        self.im_focused = true;
+    }
+
+    fn unfocusImContext(self: *Pane) void {
+        if (!self.im_focused) return;
+        const ctx = self.im_context orelse {
+            self.im_focused = false;
+            return;
+        };
+        c.gtk_im_context_focus_out(@ptrCast(ctx));
+        c.gtk_im_context_reset(@ptrCast(ctx));
+        self.im_composing = false;
+        self.im_len = 0;
+        self.im_focused = false;
     }
 
     pub fn clearScrollback(self: *Pane) void {
@@ -459,6 +486,7 @@ fn setupInputControllers(gl_area_widget: *c.GtkWidget, pane: *Pane) void {
     // Focus controller
     const focus_ctrl = c.gtk_event_controller_focus_new();
     connectSignal(focus_ctrl, "enter", &onFocusEnter, pane);
+    connectSignal(focus_ctrl, "leave", &onFocusLeave, pane);
     c.gtk_widget_add_controller(gl_area_widget, @ptrCast(focus_ctrl));
 }
 
@@ -529,6 +557,9 @@ fn onGlRealize(_: *c.GtkGLArea, user_data: c.gpointer) callconv(.c) void {
     // Set up IM context with the widget
     if (pane.im_context) |ctx| {
         c.gtk_im_context_set_client_widget(@ptrCast(ctx), @as(*c.GtkWidget, @ptrCast(gl_area)));
+        if (c.gtk_widget_has_focus(@as(*c.GtkWidget, @ptrCast(gl_area))) != 0) {
+            pane.focusImContext();
+        }
     }
 }
 
@@ -550,6 +581,7 @@ fn onGlUnrealize(_: *c.GtkGLArea, user_data: c.gpointer) callconv(.c) void {
         }
     }
 
+    pane.unfocusImContext();
     if (pane.im_context) |ctx| {
         c.gtk_im_context_set_client_widget(@ptrCast(ctx), null);
     }
@@ -879,6 +911,25 @@ fn addSidedMods(mods: *c_uint, keyval: c.guint, is_release: bool) void {
     }
 }
 
+fn syncImCursorLocation(pane: *Pane) void {
+    const ctx = pane.im_context orelse return;
+    const surface = pane.surface orelse return;
+
+    var x: f64 = 0;
+    var y: f64 = 0;
+    var width: f64 = 1;
+    var height: f64 = 1;
+    c.ghostty_surface_ime_point(surface, &x, &y, &width, &height);
+
+    const rect = c.GdkRectangle{
+        .x = @intFromFloat(x),
+        .y = @intFromFloat(y),
+        .width = @max(@as(c.gint, 1), @as(c.gint, @intFromFloat(width))),
+        .height = @max(@as(c.gint, 1), @as(c.gint, @intFromFloat(height))),
+    };
+    c.gtk_im_context_set_cursor_location(@ptrCast(ctx), &rect);
+}
+
 fn onKeyPressed(
     controller: *c.GtkEventControllerKey,
     keyval: c.guint,
@@ -911,20 +962,18 @@ fn handleKeyEvent(
 ) bool {
     const surface = pane.surface orelse return false;
     const event = c.gtk_event_controller_get_current_event(@ptrCast(controller));
+    defer pane.im_len = 0;
 
     // IME handling
     if (pane.im_context) |ctx| {
-        const was_composing = pane.im_composing;
-        pane.in_keyevent = true;
-        defer pane.in_keyevent = false;
+        pane.in_keyevent = ime_state.beginKeyEvent(pane.im_composing);
+        defer pane.in_keyevent = .none;
 
+        syncImCursorLocation(pane);
         const im_handled = c.gtk_im_context_filter_keypress(@ptrCast(ctx), event) != 0;
-        defer pane.im_len = 0;
 
-        if (im_handled) {
-            if (pane.im_composing) return true;
-            if (was_composing) return true;
-            if (pane.im_len == 0) return true;
+        if (ime_state.filterDecision(im_handled, pane.im_composing, pane.in_keyevent, pane.im_len) == .consume) {
+            return true;
         }
     }
 
@@ -980,16 +1029,32 @@ fn onImCommit(_: *c.GtkIMContext, text: [*:0]const u8, user_data: c.gpointer) ca
     const pane: *Pane = @ptrCast(@alignCast(user_data));
     const text_slice = std.mem.sliceTo(text, 0);
 
-    if (pane.in_keyevent) {
-        // Store for association with the key event
-        const len = @min(text_slice.len, pane.im_buf.len - 1);
-        @memcpy(pane.im_buf[0..len], text_slice[0..len]);
-        pane.im_len = len;
-    } else {
-        // Outside key event: send directly to ghostty
-        if (pane.surface) |s| {
-            c.ghostty_surface_text(s, text, text_slice.len);
-        }
+    switch (ime_state.commitRoute(pane.in_keyevent)) {
+        .associate_with_key => {
+            // Plain key translations such as "a" should stay associated with
+            // the key event so Ghostty still sees the physical key metadata.
+            const len = @min(text_slice.len, pane.im_buf.len - 1);
+            @memcpy(pane.im_buf[0..len], text_slice[0..len]);
+            pane.im_len = len;
+            return;
+        },
+        .send_direct => {},
+    }
+
+    pane.im_composing = false;
+    if (pane.surface) |s| {
+        c.ghostty_surface_preedit(s, null, 0);
+
+        const ev = c.ghostty_input_key_s{
+            .action = c.GHOSTTY_ACTION_PRESS,
+            .mods = 0,
+            .consumed_mods = 0,
+            .keycode = 0,
+            .text = text,
+            .unshifted_codepoint = 0,
+            .composing = false,
+        };
+        _ = c.ghostty_surface_key(s, ev);
     }
 }
 
@@ -1000,6 +1065,7 @@ fn onImPreeditStart(_: *c.GtkIMContext, user_data: c.gpointer) callconv(.c) void
 
 fn onImPreeditChanged(ctx: *c.GtkIMContext, user_data: c.gpointer) callconv(.c) void {
     const pane: *Pane = @ptrCast(@alignCast(user_data));
+    pane.im_composing = true;
     if (pane.surface) |s| {
         var preedit_text: [*c]u8 = null;
         var cursor_pos: c.gint = 0;
@@ -1075,6 +1141,7 @@ fn onMousePress(
     const mods = translateMods(gtk_mods);
 
     _ = c.ghostty_surface_mouse_button(surface, c.GHOSTTY_MOUSE_PRESS, button, mods);
+    syncImCursorLocation(pane);
 }
 
 fn onMouseRelease(
@@ -1094,6 +1161,7 @@ fn onMouseRelease(
     const mods = translateMods(gtk_mods);
 
     _ = c.ghostty_surface_mouse_button(surface, c.GHOSTTY_MOUSE_RELEASE, button, mods);
+    syncImCursorLocation(pane);
 }
 
 fn onScroll(
@@ -1177,6 +1245,8 @@ fn drawScrollbarCb(
 
 fn onFocusEnter(_: *c.GtkEventControllerFocus, user_data: c.gpointer) callconv(.c) void {
     const pane: *Pane = @ptrCast(@alignCast(user_data));
+    pane.focusImContext();
+
     const Window = @import("window.zig");
     const wm = Window.window_manager orelse return;
     const state = wm.findByWorkspaceId(pane.workspace_id) orelse return;
@@ -1206,6 +1276,11 @@ fn onFocusEnter(_: *c.GtkEventControllerFocus, user_data: c.gpointer) callconv(.
     grp.focus();
     if (ws.focused_column != old_col) state.sidebar.refresh();
     state.updateWindowTitle();
+}
+
+fn onFocusLeave(_: *c.GtkEventControllerFocus, user_data: c.gpointer) callconv(.c) void {
+    const pane: *Pane = @ptrCast(@alignCast(user_data));
+    pane.unfocusImContext();
 }
 
 fn onMouseEnter(

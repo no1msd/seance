@@ -88,7 +88,7 @@ export SEANCE_CODEX_PID=$$
 
 # ── Launch codex (no exec — wrapper must survive for cleanup) ───────────────
 
-CODEX_HOME="$SESSION_DIR" "$REAL_CODEX" --enable codex_hooks "$@"
+CODEX_HOME="$SESSION_DIR" "$REAL_CODEX" --enable hooks "$@"
 rc=$?
 
 # ── Session-end cleanup ─────────────────────────────────────────────────────

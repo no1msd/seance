@@ -274,7 +274,7 @@ pub fn build(b: *std.Build) void {
     const test_step = b.step("test", "Run unit tests");
 
     // Standalone tests (no external dependencies)
-    for ([_][]const u8{ "src/osc_parser.zig", "src/port_scan.zig" }) |src| {
+    for ([_][]const u8{ "src/ime_state.zig", "src/osc_parser.zig", "src/port_scan.zig" }) |src| {
         const mod = b.createModule(.{
             .root_source_file = b.path(src),
             .target = target,
