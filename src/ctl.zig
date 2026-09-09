@@ -144,6 +144,8 @@ fn dispatch(ctx: Ctx, command: []const u8) u8 {
     if (eql(command, "claude-hook")) return cmdClaudeHook(ctx);
     if (eql(command, "codex-hook")) return cmdCodexHook(ctx);
     if (eql(command, "pi-hook")) return cmdPiHook(ctx);
+    if (eql(command, "opencode-hook")) return cmdAgentHook(ctx, opencode_agent);
+    if (eql(command, "opencode-config")) return cmdOpencodeConfig(ctx);
     if (eql(command, "help") or eql(command, "--help") or eql(command, "-h")) {
         printUsage();
         return 0;
@@ -1222,6 +1224,30 @@ const pi_agent = AgentConfig{
     .session_dir_env = "SEANCE_PI_SESSION_DIR",
 };
 
+const opencode_agent = AgentConfig{
+    .name = "OpenCode",
+    .display_name = "OpenCode",
+    .usage = "usage: opencode-hook <state|session-end>\n",
+    .pid_env = "SEANCE_OPENCODE_PID",
+    .response = "OK\n",
+    .status_key_prefix = "opencode",
+    .status_key_mode = .surface,
+    .has_ask_user_handling = false,
+    .has_notification_hook = false,
+    .has_post_tool_hook = false,
+    .session_dir_env = null,
+};
+
+fn cmdOpencodeConfig(ctx: Ctx) u8 {
+    if (ctx.rest.len != 1) return 1;
+    const content = @import("opencode.zig").withPlugin(ctx.alloc, io.getenv("OPENCODE_CONFIG_CONTENT") orelse "", ctx.rest[0]) catch {
+        werr("seance: could not add OpenCode plugin to inline config\n");
+        return 1;
+    };
+    wout(content);
+    return 0;
+}
+
 fn cmdClaudeHook(ctx: Ctx) u8 {
     return cmdAgentHook(ctx, claude_agent);
 }
@@ -1327,9 +1353,23 @@ fn cmdAgentHook(ctx: Ctx, agent: AgentConfig) u8 {
         if (agent.has_notification_hook) return agentHookNotification(h);
     }
     if (eql(hook_cmd, "stop")) return agentHookStop(h);
+    if (eql(agent.name, "OpenCode") and eql(hook_cmd, "state")) return agentHookOpenCodeState(h);
 
     wfmt("seance: unknown hook '{s}'\n", .{hook_cmd});
     return 1;
+}
+
+fn agentHookOpenCodeState(h: HookCtx) u8 {
+    const state = getNestedString(h.input, "state") orelse return 1;
+    if (!eql(state, "Running") and !eql(state, "Idle") and !eql(state, "Needs input")) return 1;
+    if (h.workspace) |workspace| {
+        setAgentStatus(h, workspace, state, if (eql(state, "Idle")) 5 else 10);
+        if (getNestedString(h.input, "title")) |title| {
+            emitNotification(h, workspace, title, getNestedString(h.input, "message") orelse "", isWorkspaceFocused(h.alloc, h.socket_path, workspace));
+        }
+    }
+    wout(h.agent.response);
+    return 0;
 }
 
 fn setAgentStatus(h: HookCtx, ws: u64, value: []const u8, priority: i32) void {
@@ -2107,6 +2147,10 @@ fn printUsage() void {
         \\  codex-hook <event>      Handle Codex CLI lifecycle event
         \\    Events: session-start, session-end, prompt-submit,
         \\            pre-tool-use, post-tool-use, stop
+        \\
+        \\OpenCode Hooks:
+        \\  opencode-hook state    Update aggregate pane state from the bundled plugin
+        \\  opencode-hook session-end  Clear OpenCode status when the process exits
         \\
     );
 }

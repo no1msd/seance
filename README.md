@@ -24,7 +24,7 @@
 
 ## Why Séance?
 
-Séance is a GTK4 terminal multiplexer for Linux. It auto-detects [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [Codex](https://github.com/openai/codex), and [Pi](https://github.com/badlogic/pi-mono) sessions running inside it and tracks their status (working, waiting for permission, idle) live in the sidebar. Permission requests and task completions are surfaced as desktop notifications with unread tracking. No manual dotfile edits: open an agent in a pane to track it.
+Séance is a GTK4 terminal multiplexer for Linux. It auto-detects [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [Codex](https://github.com/openai/codex), [Pi](https://github.com/badlogic/pi-mono), and [OpenCode](https://opencode.ai) sessions running inside it and tracks their status (working, waiting for permission, idle) live in the sidebar. Permission requests and task completions are surfaced as desktop notifications with unread tracking. No manual dotfile edits: open an agent in a pane to track it.
 
 ### Linux-native, not Electron
 
@@ -36,12 +36,20 @@ Panes are arranged in a horizontal strip that you scroll through, borrowing the 
 
 ### Agent-agnostic
 
-Claude Code, Codex, and Pi are auto-tracked out of the box. Adding support for another agent is a hook config PR rather than a rewrite. Agents that do not speak hooks still get all the plain multiplexer features.
+Claude Code, Codex, Pi, and OpenCode are auto-tracked out of the box. Adding support for another agent is a hook config PR rather than a rewrite. Agents that do not speak hooks still get all the plain multiplexer features.
 
 Codex requires a one-time review of Séance's hooks via `/hooks`. Approval persists
 across panes and restarts; changes to the hook definitions require a new review.
 Séance adds its hooks for the current invocation and keeps your Codex home,
 existing hooks, authentication, and history in place.
+
+OpenCode's bundled plugin is added for each local launch through its inline
+configuration. Existing configuration, plugins, authentication, and history stay
+in place. Resumed sessions and subagents contribute to the pane's status;
+permission requests and questions show **Needs input** until answered.
+Remote `opencode attach` sessions and `--pure` launches are not tracked.
+Disable tracking in **Settings → Integrations → OpenCode Integration**, or set
+`opencode-hooks = false` under `[behavior]` in Séance's configuration, then open a new pane.
 
 ### Scriptable
 

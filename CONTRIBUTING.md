@@ -33,6 +33,16 @@ Set `SEANCE_TEST_CODEX` to the real Codex binary (outside Séance's wrapper dire
 to also check hook loading and approval persistence using its local app-server.
 This check uses a temporary Codex home and makes no model calls.
 
+The same Python discovery command runs the OpenCode wrapper tests and, with Node
+installed, the plugin lifecycle tests. Node is only a test dependency; OpenCode
+provides the plugin runtime. To also verify plugin loading against an installed
+OpenCode binary without model calls:
+
+```bash
+SEANCE_TEST_BINARY="$PWD/zig-out/bin/seance" SEANCE_TEST_OPENCODE=/usr/bin/opencode \
+  python3 -m unittest discover -s tests -p 'test_opencode.py' -v
+```
+
 Fullscreen tests require Openbox, Xvfb, xdotool, setxkbmap, a C compiler, and
 libadwaita headers. They use a separate X server and window manager. Shell
 integration tests require zsh and check user startup files and both sets of hooks:
