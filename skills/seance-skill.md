@@ -10,6 +10,16 @@ You are inside Seance if either of these environment variables is set:
 - `$SEANCE_SOCKET_PATH` — path to the Seance Unix socket
 - `$SEANCE_SURFACE_ID` — ID of the pane you're running in
 
+## Agent tracking
+
+Launch `agy` normally in a Séance pane to track Antigravity CLI. Its wrapper uses
+the TUI status callback to show working, actual tool approval requests, and idle
+states. An idle notification means the agent stopped working, including after
+cancellation or denial. Print mode and non-tool input dialogs are not tracked.
+The first tracked launch adds an inert callback to Antigravity's settings while
+preserving existing status-line output. Disable tracking with
+`antigravity-hooks = false` under Séance's `[behavior]` settings, then open a new pane.
+
 ## Architecture Overview
 
 Seance uses a **horizontal scrolling column** layout (inspired by niri) instead of a fixed grid. Adding a pane never shrinks existing ones — you scroll to see more.

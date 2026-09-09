@@ -38,6 +38,7 @@
 # focus-follows-mouse = false
 # confirm-close-window = true
 # opencode-hooks = true          # track local OpenCode sessions (new panes)
+# antigravity-hooks = true       # track Antigravity CLI sessions (new panes)
 
 [notifications]
 # sound = "default"              # "default", "none", or path to .wav/.ogg file

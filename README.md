@@ -24,7 +24,7 @@
 
 ## Why Séance?
 
-Séance is a GTK4 terminal multiplexer for Linux. It auto-detects [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [Codex](https://github.com/openai/codex), [Pi](https://github.com/badlogic/pi-mono), and [OpenCode](https://opencode.ai) sessions running inside it and tracks their status (working, waiting for permission, idle) live in the sidebar. Permission requests and task completions are surfaced as desktop notifications with unread tracking. No manual dotfile edits: open an agent in a pane to track it.
+Séance is a GTK4 terminal multiplexer for Linux. It auto-detects [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [Codex](https://github.com/openai/codex), [Pi](https://github.com/badlogic/pi-mono), [OpenCode](https://opencode.ai), and [Antigravity CLI](https://antigravity.google/docs/cli/getting-started) sessions running inside it and tracks their status (working, waiting for permission, idle) live in the sidebar. Permission requests and task completions are surfaced as desktop notifications with unread tracking. No manual dotfile edits: open an agent in a pane to track it.
 
 ### Linux-native, not Electron
 
@@ -36,7 +36,7 @@ Panes are arranged in a horizontal strip that you scroll through, borrowing the 
 
 ### Agent-agnostic
 
-Claude Code, Codex, Pi, and OpenCode are auto-tracked out of the box. Adding support for another agent is a hook config PR rather than a rewrite. Agents that do not speak hooks still get all the plain multiplexer features.
+Claude Code, Codex, Pi, OpenCode, and Antigravity CLI are auto-tracked out of the box. Agents that do not expose lifecycle events still get all the plain multiplexer features.
 
 Codex requires a one-time review of Séance's hooks via `/hooks`. Approval persists
 across panes and restarts; changes to the hook definitions require a new review.
@@ -50,6 +50,24 @@ permission requests and questions show **Needs input** until answered.
 Remote `opencode attach` sessions and `--pure` launches are not tracked.
 Disable tracking in **Settings → Integrations → OpenCode Integration**, or set
 `opencode-hooks = false` under `[behavior]` in Séance's configuration, then open a new pane.
+
+Antigravity CLI (`agy`) is tracked through its [status-line callback](https://antigravity.google/docs/cli/statusline/).
+On first launch inside Séance, the wrapper adds the callback to
+`~/.gemini/antigravity-cli/settings.json`, keeping an original backup at
+`settings.json.seance-backup`. Existing settings and custom status-line output
+are preserved; the default status line stays visible. The callback is inert
+outside tracked launches and resolves Séance through the current wrapper, so it
+also works with AppImages.
+
+Actual tool confirmation dialogs show **Needs input** and trigger one notification
+per transition. Returning to idle triggers **Antigravity is idle**, including
+after cancellation or denial; this does not assert that the task succeeded.
+Reported background tasks keep the pane working until they finish. Tracking is
+limited to the active TUI's reported state: headless/print mode, unreported
+background permission requests, and non-tool input dialogs are not covered.
+An explicitly disabled status-line callback is respected and disables tracking.
+Disable the integration in **Settings → Integrations → Antigravity CLI Integration**,
+or set `antigravity-hooks = false` under `[behavior]`, then open a new pane.
 
 ### Scriptable
 

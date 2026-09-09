@@ -146,6 +146,8 @@ fn dispatch(ctx: Ctx, command: []const u8) u8 {
     if (eql(command, "pi-hook")) return cmdPiHook(ctx);
     if (eql(command, "opencode-hook")) return cmdAgentHook(ctx, opencode_agent);
     if (eql(command, "opencode-config")) return cmdOpencodeConfig(ctx);
+    if (eql(command, "antigravity-config")) return cmdAntigravityConfig(ctx);
+    if (eql(command, "antigravity-hook")) return cmdAntigravityHook(ctx);
     if (eql(command, "help") or eql(command, "--help") or eql(command, "-h")) {
         printUsage();
         return 0;
@@ -1238,6 +1240,69 @@ const opencode_agent = AgentConfig{
     .session_dir_env = null,
 };
 
+const antigravity_agent = AgentConfig{
+    .name = "Antigravity",
+    .display_name = "Antigravity CLI",
+    .usage = "usage: antigravity-hook <state|session-end>\n",
+    .pid_env = "SEANCE_AGY_PID",
+    .response = "",
+    .status_key_prefix = "antigravity",
+    .status_key_mode = .surface,
+    .has_ask_user_handling = false,
+    .has_notification_hook = false,
+    .has_post_tool_hook = false,
+    .session_dir_env = null,
+};
+
+fn cmdAntigravityConfig(ctx: Ctx) u8 {
+    if (ctx.rest.len != 1) return 1;
+    @import("antigravity.zig").install(ctx.alloc, ctx.rest[0]) catch |err| {
+        werr(std.fmt.allocPrint(ctx.alloc, "seance: could not enable Antigravity tracking: {s}\n", .{@errorName(err)}) catch "seance: could not enable Antigravity tracking\n");
+        return 1;
+    };
+    return 0;
+}
+
+fn cmdAntigravityHook(ctx: Ctx) u8 {
+    const agy = @import("antigravity.zig");
+    if (ctx.rest.len != 1) return 1;
+    const ending = eql(ctx.rest[0], "session-end");
+    if (!ending and !eql(ctx.rest[0], "state")) return 1;
+    const directory = io.getenv("SEANCE_AGY_SESSION_DIR") orelse return 0;
+    const input = if (ending) "{}" else io.readToEndAlloc(.stdin(), ctx.alloc, 1024 * 1024) catch return 1;
+    var tracker = agy.Tracker.open(ctx.alloc, directory) catch return 0;
+    defer tracker.close();
+    if (tracker.state.closed) return 0;
+    const h = HookCtx{
+        .alloc = ctx.alloc,
+        .socket_path = ctx.socket_path,
+        .input = .null,
+        .session_id = null,
+        .workspace = ctx.workspace orelse envInt("SEANCE_WORKSPACE_ID"),
+        .surface = ctx.surface orelse envInt("SEANCE_SURFACE_ID"),
+        .store = SessionStore.init(ctx.alloc),
+        .agent = antigravity_agent,
+    };
+    if (ending) {
+        tracker.state.closed = true;
+        tracker.save(ctx.alloc, tracker.state) catch return 1;
+        return agentHookSessionEnd(h);
+    }
+    const parsed = std.json.parseFromSlice(agy.Snapshot, ctx.alloc, input, .{ .ignore_unknown_fields = true }) catch return 1;
+    const update = agy.transition(tracker.state, parsed.value) orelse return 0;
+    if (!update.changed) return 0;
+    if (h.workspace) |ws| {
+        trySetAgentStatus(h, ws, update.state.phase.label(), if (update.state.phase == .idle or update.state.phase == .failed) 5 else 10) catch return 1;
+        if (update.notification != .none) {
+            const title = if (update.notification == .permission) "Antigravity needs input" else "Antigravity is idle";
+            const body = if (update.notification == .permission) "A tool is waiting for your approval." else parsed.value.cwd;
+            emitNotification(h, ws, title, body, isWorkspaceFocused(h.alloc, h.socket_path, ws));
+        }
+    }
+    tracker.save(ctx.alloc, update.state) catch return 1;
+    return 0;
+}
+
 fn cmdOpencodeConfig(ctx: Ctx) u8 {
     if (ctx.rest.len != 1) return 1;
     const content = @import("opencode.zig").withPlugin(ctx.alloc, io.getenv("OPENCODE_CONFIG_CONTENT") orelse "", ctx.rest[0]) catch {
@@ -1373,9 +1438,13 @@ fn agentHookOpenCodeState(h: HookCtx) u8 {
 }
 
 fn setAgentStatus(h: HookCtx, ws: u64, value: []const u8, priority: i32) void {
+    trySetAgentStatus(h, ws, value, priority) catch {};
+}
+
+fn trySetAgentStatus(h: HookCtx, ws: u64, value: []const u8, priority: i32) !void {
     const sk = jsonEscapeAlloc(h.alloc, h.getStatusKey());
-    const p = std.fmt.allocPrint(h.alloc, "{{\"workspace_id\":{d},\"key\":\"{s}\",\"value\":\"{s}\",\"priority\":{d},\"is_agent\":true,\"display_name\":\"{s}\"}}", .{ ws, sk, jsonEscapeAlloc(h.alloc, value), priority, h.agent.name }) catch null;
-    _ = apiCall(h.alloc, h.socket_path, "workspace.set_status", p) catch {};
+    const p = try std.fmt.allocPrint(h.alloc, "{{\"workspace_id\":{d},\"key\":\"{s}\",\"value\":\"{s}\",\"priority\":{d},\"is_agent\":true,\"display_name\":\"{s}\"}}", .{ ws, sk, jsonEscapeAlloc(h.alloc, value), priority, h.agent.name });
+    _ = try apiCall(h.alloc, h.socket_path, "workspace.set_status", p);
 }
 
 fn emitNotification(h: HookCtx, ws: u64, title: []const u8, body: []const u8, focused: bool) void {
@@ -2151,6 +2220,10 @@ fn printUsage() void {
         \\OpenCode Hooks:
         \\  opencode-hook state    Update aggregate pane state from the bundled plugin
         \\  opencode-hook session-end  Clear OpenCode status when the process exits
+        \\
+        \\Antigravity CLI Hooks:
+        \\  antigravity-hook <state|session-end>  Track Antigravity CLI status
+        \\  antigravity-config <settings.json>   Install its status callback
         \\
     );
 }
