@@ -762,7 +762,7 @@ fn initSurface(pane: *Pane, width: u32, height: u32) void {
     }
 
     // Build env var array
-    var env_vars: [18]c.ghostty_env_var_s = undefined;
+    var env_vars: [19]c.ghostty_env_var_s = undefined;
     var env_count: usize = 0;
 
     env_vars[env_count] = .{ .key = ws_key, .value = ws_val };
@@ -803,6 +803,10 @@ fn initSurface(pane: *Pane, width: u32, height: u32) void {
     }
     if (!cfg.opencode_hooks) {
         env_vars[env_count] = .{ .key = "SEANCE_OPENCODE_HOOKS_DISABLED", .value = "1" };
+        env_count += 1;
+    }
+    if (!cfg.antigravity_hooks) {
+        env_vars[env_count] = .{ .key = "SEANCE_ANTIGRAVITY_HOOKS_DISABLED", .value = "1" };
         env_count += 1;
     }
     env_vars[env_count] = .{ .key = "SEANCE_SHELL_INTEGRATION", .value = "1" };

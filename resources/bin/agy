@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+# Track Antigravity's TUI through its status callback; retain the real profile.
+set -euo pipefail
+
+WRAPPER_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+REAL_AGY=""
+IFS=: read -ra PATH_DIRS <<< "$PATH"
+for dir in "${PATH_DIRS[@]}"; do
+    dir="${dir:-.}"
+    resolved="$(cd "$dir" 2>/dev/null && pwd -P)" || continue
+    [[ "$resolved" == "$WRAPPER_DIR" ]] && continue
+    if [[ -f "$dir/agy" && -x "$dir/agy" && ! "$dir/agy" -ef "${BASH_SOURCE[0]}" ]]; then
+        REAL_AGY="$resolved/agy"
+        break
+    fi
+done
+if [[ -z "$REAL_AGY" ]]; then
+    echo "agy: command not found" >&2
+    exit 127
+fi
+
+# Do not inherit a parent agent's callback destination when passing through.
+unset SEANCE_AGY_SESSION_DIR SEANCE_AGY_BIN
+if [[ -z "${SEANCE_SURFACE_ID:-}" || -z "${SEANCE_WORKSPACE_ID:-}" ||
+      -z "${SEANCE_SOCKET_PATH:-}" || "${SEANCE_ANTIGRAVITY_HOOKS_DISABLED:-}" == 1 ]]; then
+    exec "$REAL_AGY" "$@"
+fi
+
+# Print mode has no TUI status callback. Skip management commands and help,
+# while treating values such as a prompt named "--help" as ordinary arguments.
+skip_value=0
+for arg in "$@"; do
+    if (( skip_value )); then skip_value=0; continue; fi
+    case "$arg" in
+        --) break ;;
+        -h|--help|--version|-p|-p=*|--print|--print=*|--prompt|--prompt=*|--input-format|--input-format=*|--output-format|--output-format=*)
+            exec "$REAL_AGY" "$@" ;;
+        --add-dir|--agent|--conversation|--effort|-i|--prompt-interactive|--log-file|--mode|--model|--project|--json-schema|--print-timeout)
+            skip_value=1 ;;
+        agent|agents|changelog|help|install|mcp|mic-serve|models|plugin|plugins|update)
+            exec "$REAL_AGY" "$@" ;;
+    esac
+done
+
+SEANCE_AGY_BIN="$WRAPPER_DIR/../../../bin/seance"
+if [[ ! -x "$SEANCE_AGY_BIN" ]] || ! timeout 0.75 "$SEANCE_AGY_BIN" ctl ping >/dev/null 2>&1; then
+    exec "$REAL_AGY" "$@"
+fi
+if ! timeout 3 "$SEANCE_AGY_BIN" ctl antigravity-config "$HOME/.gemini/antigravity-cli/settings.json"; then
+    exec "$REAL_AGY" "$@"
+fi
+
+SEANCE_AGY_SESSION_DIR=$(mktemp -d "${XDG_RUNTIME_DIR:-/tmp}/seance-agy.XXXXXXXX") || exec "$REAL_AGY" "$@"
+export SEANCE_AGY_SESSION_DIR SEANCE_AGY_BIN
+export SEANCE_AGY_PID=$$
+cleanup() {
+    timeout 3 "$SEANCE_AGY_BIN" ctl antigravity-hook session-end >/dev/null 2>&1 || true
+    rm -rf -- "$SEANCE_AGY_SESSION_DIR"
+}
+trap cleanup EXIT
+printf '{}' > "$SEANCE_AGY_SESSION_DIR/state.json"
+
+# Waiting explicitly lets signals sent to the wrapper reach the agent too.
+# Keep stdin attached: an asynchronous shell command otherwise gets /dev/null.
+agent_pid=""
+stop_agent() {
+    trap - INT TERM HUP
+    if [[ -n "$agent_pid" ]]; then
+        kill -s "$1" "$agent_pid" 2>/dev/null || true
+        wait "$agent_pid" 2>/dev/null || true
+    fi
+    exit "$2"
+}
+trap 'stop_agent INT 130' INT
+trap 'stop_agent TERM 143' TERM
+trap 'stop_agent HUP 129' HUP
+rc=0
+"$REAL_AGY" "$@" <&0 &
+agent_pid=$!
+wait "$agent_pid" || rc=$?
+exit "$rc"

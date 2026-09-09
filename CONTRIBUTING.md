@@ -43,6 +43,25 @@ SEANCE_TEST_BINARY="$PWD/zig-out/bin/seance" SEANCE_TEST_OPENCODE=/usr/bin/openc
   python3 -m unittest discover -s tests -p 'test_opencode.py' -v
 ```
 
+Antigravity wrapper, configuration, and lifecycle regressions run through the same
+Python discovery command after building. They use the real Séance binary with a
+fake agent and socket server, without model calls. The pane test requires Xvfb:
+
+```bash
+python3 -m unittest discover -s tests -p 'test_antigravity.py' -v
+SEANCE_TEST_BINARY="$PWD/zig-out/bin/seance" xvfb-run -a python3 -m unittest discover -s tests -p 'test_antigravity_pane.py' -v
+```
+
+For a live Antigravity check, launch `agy` in a pane of the new build. Confirm
+working/idle status, then use a command that requires approval and verify
+**Needs input** and one notification while the dialog stays open. Exercise both
+approval and denial, cancellation, conversation switching, and exit. Preserve
+any existing status-line script and verify its output survives setup. Antigravity
+1.1.22 emits `tool_confirmation_pending` only while a tool dialog is visible;
+`PreToolUse` alone is not evidence of an approval request. The status callback
+also reports idle after cancellation, so notifications describe readiness rather
+than successful completion. Use an isolated profile for permission-setting changes.
+
 Fullscreen tests require Openbox, Xvfb, xdotool, setxkbmap, a C compiler, and
 libadwaita headers. They use a separate X server and window manager. Shell
 integration tests require zsh and check user startup files and both sets of hooks:
