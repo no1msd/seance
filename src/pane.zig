@@ -14,6 +14,8 @@ pub const Pane = struct {
     pane_group_id: u64,
     surface: c.ghostty_surface_t = null,
     gl_area: ?*c.GtkGLArea = null,
+    // Owned reference: GTK can retain focus controllers past widget teardown.
+    focus_controller: ?*c.GtkEventController = null,
     widget: *c.GtkWidget, // outer wrapper box (for CSS border)
     cwd: [cwd_cap]u8 = [_]u8{0} ** cwd_cap,
     cwd_len: usize = 0,
@@ -151,12 +153,28 @@ pub const Pane = struct {
         return pane;
     }
 
-    /// Disconnect signal handlers on the gl_area so GTK won't fire
+    /// Disconnect signal handlers on the GLArea and focus controller so GTK won't fire
     /// callbacks into this pane after it is freed or the widget is
     /// finalized. Safe to call multiple times, and safe to call after
     /// the gl_area has already been finalized (the weak pointer added
     /// in create() will have nulled self.gl_area in that case).
     pub fn disconnectSignals(self: *Pane) void {
+        // Closing the last tab can finalize the GLArea before destroy().
+        // GTK may still emit focus-leave when selecting the replacement pane,
+        // so disconnect the controller independently of the GLArea's lifetime.
+        if (self.focus_controller) |controller| {
+            _ = c.g_signal_handlers_disconnect_matched(
+                @as(c.gpointer, @ptrCast(controller)),
+                c.G_SIGNAL_MATCH_DATA,
+                0,
+                0,
+                null,
+                null,
+                @as(c.gpointer, @ptrCast(self)),
+            );
+            self.focus_controller = null;
+            c.g_object_unref(@ptrCast(controller));
+        }
         // The IM context borrows its client widget. Detach while it is alive,
         // including close paths that disconnect the unrealize handler early.
         self.unfocusImContext();
@@ -490,6 +508,8 @@ fn setupInputControllers(gl_area_widget: *c.GtkWidget, pane: *Pane) void {
 
     // Focus controller
     const focus_ctrl = c.gtk_event_controller_focus_new();
+    _ = c.g_object_ref(@ptrCast(focus_ctrl));
+    pane.focus_controller = @ptrCast(focus_ctrl);
     connectSignal(focus_ctrl, "enter", &onFocusEnter, pane);
     connectSignal(focus_ctrl, "leave", &onFocusLeave, pane);
     c.gtk_widget_add_controller(gl_area_widget, @ptrCast(focus_ctrl));

@@ -63,6 +63,11 @@ jobs:
         env:
           SEANCE_TEST_BINARY: ${{ github.workspace }}/zig-out/bin/seance
 
+      - name: Pane close tests
+        run: python3 -m unittest discover -s tests -p 'test_pane_close.py' -v
+        env:
+          SEANCE_TEST_BINARY: ${{ github.workspace }}/zig-out/bin/seance
+
       - name: Fullscreen tests
         run: python3 -m unittest discover -s tests -p 'test_fullscreen.py' -v
         env:

@@ -78,6 +78,13 @@ They create a separate X server and never modify your desktop's keyboard layout:
 SEANCE_TEST_BINARY="$PWD/zig-out/bin/seance" python3 -m unittest discover -s tests -p 'test_keyboard_remaps.py' -v
 ```
 
+Pane close tests use the same isolated keyboard setup. They check last-tab
+teardown in stacked and tabbed columns, shell exit, and keyboard focus afterward:
+
+```bash
+SEANCE_TEST_BINARY="$PWD/zig-out/bin/seance" python3 -m unittest discover -s tests -p 'test_pane_close.py' -v
+```
+
 IME tests also use isolated X servers. They exercise GTK's compose engine and a
 test input context for Korean syllable transitions, asynchronous commits, focus,
 and cursor positioning. The test context requires a C compiler and GTK4 headers:
