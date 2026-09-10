@@ -214,7 +214,9 @@ pub const SocketServer = struct {
         return switch (id_val) {
             .string => |s| std.fmt.bufPrint(buf, "\"{s}\"", .{s}) catch "null",
             .integer => |n| std.fmt.bufPrint(buf, "{d}", .{n}) catch "null",
-            .float => |f| std.fmt.bufPrint(buf, "{d}", .{@as(i64, @intFromFloat(f))}) catch "null",
+            // IDs are echoed, not used as integers. Scientific notation also
+            // keeps even the largest finite f64 within the response ID buffer.
+            .float => |f| if (std.math.isFinite(f)) std.fmt.bufPrint(buf, "{e}", .{f}) catch "null" else "null",
             else => "null",
         };
     }
@@ -369,7 +371,9 @@ pub const SocketServer = struct {
         const val = p.object.get(key) orelse return null;
         return switch (val) {
             .integer => |n| if (n >= 0) @intCast(n) else null,
-            .float => |f| if (f >= 0) @intCast(@as(i64, @intFromFloat(f))) else null,
+            // Use an exclusive upper bound: converting maxInt(u64) to f64
+            // rounds up to 2^64. These comparisons also reject NaN/infinity.
+            .float => |f| if (f >= 0 and f < 0x1p64) @as(u64, @intFromFloat(f)) else null,
             .string => |s| std.fmt.parseInt(u64, s, 10) catch null,
             else => null,
         };

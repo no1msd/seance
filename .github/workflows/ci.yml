@@ -45,7 +45,7 @@ jobs:
         run: zig build
 
       - name: Unit tests
-        run: zig build test
+        run: G_DEBUG=fatal-criticals GTK_A11Y=none xvfb-run -a zig build test
 
       - name: Codex wrapper tests
         run: python3 -m unittest discover -s tests -v
@@ -65,6 +65,11 @@ jobs:
 
       - name: Pane close tests
         run: python3 -m unittest discover -s tests -p 'test_pane_close.py' -v
+        env:
+          SEANCE_TEST_BINARY: ${{ github.workspace }}/zig-out/bin/seance
+
+      - name: Socket robustness tests
+        run: xvfb-run -a python3 -m unittest discover -s tests -p 'test_socket_server.py' -v
         env:
           SEANCE_TEST_BINARY: ${{ github.workspace }}/zig-out/bin/seance
 

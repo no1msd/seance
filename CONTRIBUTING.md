@@ -20,7 +20,8 @@ zig build
 You need Zig 0.16.x, GTK4, libadwaita, OpenGL 4.3+, and Linux. The submodule (`ghostty`) must be checked out for libghostty to build.
 
 The fork's [patch ledger](ghostty/SEANCE_PATCHES.md) documents the embedding
-changes that must survive upstream updates. Run `zig build test` and
+changes that must survive upstream updates. Run
+`G_DEBUG=fatal-criticals GTK_A11Y=none xvfb-run -a zig build test` and
 `xvfb-run zig build e2e`, then exercise scrollback restore, clipboard, and pane
 reparenting with:
 
@@ -79,10 +80,18 @@ SEANCE_TEST_BINARY="$PWD/zig-out/bin/seance" python3 -m unittest discover -s tes
 ```
 
 Pane close tests use the same isolated keyboard setup. They check last-tab
-teardown in stacked and tabbed columns, shell exit, and keyboard focus afterward:
+teardown in stacked and tabbed columns, shell exit, keyboard focus afterward,
+and closing windows while terminal output is in flight:
 
 ```bash
 SEANCE_TEST_BINARY="$PWD/zig-out/bin/seance" python3 -m unittest discover -s tests -p 'test_pane_close.py' -v
+```
+
+Control-socket number parsing tests cover oversized request IDs and integer
+parameter boundaries:
+
+```bash
+SEANCE_TEST_BINARY="$PWD/zig-out/bin/seance" xvfb-run -a python3 -m unittest discover -s tests -p 'test_socket_server.py' -v
 ```
 
 IME tests also use isolated X servers. They exercise GTK's compose engine and a
