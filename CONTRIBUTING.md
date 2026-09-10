@@ -81,7 +81,9 @@ SEANCE_TEST_BINARY="$PWD/zig-out/bin/seance" python3 -m unittest discover -s tes
 
 Pane close tests use the same isolated keyboard setup. They check last-tab
 teardown in stacked and tabbed columns, shell exit, keyboard focus afterward,
-and closing windows while terminal output is in flight:
+and closing windows or workspaces while terminal output is in flight. The
+remaining window or workspace must still accept input. The fork's patch ledger
+also lists the Ghostty queue cancellation and payload ownership tests:
 
 ```bash
 SEANCE_TEST_BINARY="$PWD/zig-out/bin/seance" python3 -m unittest discover -s tests -p 'test_pane_close.py' -v

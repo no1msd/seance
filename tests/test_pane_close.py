@@ -110,7 +110,7 @@ class WindowCloseTests(keyboard.PhysicalKeyboardTestCase):
         self.assertEqual(self.app.process.returncode, 0)
         self.assert_no_gtk_criticals()
 
-    def test_close_window_with_scrollback_keeps_other_window_usable(self):
+    def close_output_window(self, lines):
         self.app.call("window.create")
         windows = self.run_x("xdotool", "search", "--onlyvisible", "--pid",
                              str(self.app.process.pid)).strip().splitlines()
@@ -118,11 +118,27 @@ class WindowCloseTests(keyboard.PhysicalKeyboardTestCase):
         self.app.wait(lambda: self.app.call("window.current")["index"] == 1,
                       "second window focused")
         self.ready_surfaces()
-        self.start_workspaces_output(lines=200)
+        self.start_workspaces_output(lines=lines)
         self.app.call("window.close", {"window_id": 1})
         self.app.wait(lambda: len(self.app.call("window.list")["windows"]) == 1,
                       "second window closes")
         self.app.print_marker("SURVIVING_WINDOW")
+        self.app.stop()
+        self.assertEqual(self.app.process.returncode, 0)
+        self.assert_no_gtk_criticals()
+
+    def test_close_window_with_scrollback_keeps_other_window_usable(self):
+        self.close_output_window(lines=200)
+
+    def test_close_busy_window_keeps_other_window_usable(self):
+        self.close_output_window(lines=400000)
+
+    def test_close_busy_workspace_keeps_other_workspace_usable(self):
+        self.start_workspaces_output()
+        self.app.call("workspace.close")
+        self.app.wait(lambda: len(self.app.call("workspace.list")["workspaces"]) == 1,
+                      "busy workspace closes")
+        self.app.print_marker("SURVIVING_WORKSPACE")
         self.app.stop()
         self.assertEqual(self.app.process.returncode, 0)
         self.assert_no_gtk_criticals()

@@ -47,6 +47,13 @@ jobs:
       - name: Unit tests
         run: G_DEBUG=fatal-criticals GTK_A11Y=none xvfb-run -a zig build test
 
+      - name: Ghostty shutdown tests
+        working-directory: ghostty
+        run: >-
+          zig build test -Dapp-runtime=none -Dskip-macos-artifacts=true
+          -Dtest-filter='basic push and pop' -Dtest-filter='timed push'
+          -Dtest-filter='cancelled push' -Dtest-filter='undelivered surface messages'
+
       - name: Codex wrapper tests
         run: python3 -m unittest discover -s tests -v
 
