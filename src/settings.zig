@@ -44,6 +44,7 @@ const Widgets = struct {
     pi_hooks: ?*c.GtkWidget = null,
     opencode_hooks: ?*c.GtkWidget = null,
     antigravity_hooks: ?*c.GtkWidget = null,
+    omp_hooks: ?*c.GtkWidget = null,
 
     // Combos
     notification_sound: ?*c.GtkWidget = null,
@@ -443,6 +444,7 @@ fn buildIntegrationsSection(page: *c.GtkWidget, cfg: *const config_mod.Config) v
     w.pi_hooks = addSwitchRow(g2, "Pi Agent Integration", if (cfg.pi_hooks) "Sidebar shows Pi session status and notifications." else "Pi runs without seance integration.", cfg.pi_hooks);
     w.opencode_hooks = addSwitchRow(g2, "OpenCode Integration", if (cfg.opencode_hooks) "Sidebar shows OpenCode session status and notifications." else "OpenCode runs without seance integration.", cfg.opencode_hooks);
     w.antigravity_hooks = addSwitchRow(g2, "Antigravity CLI Integration", if (cfg.antigravity_hooks) "Sidebar shows Antigravity session status and notifications." else "Antigravity runs without seance integration.", cfg.antigravity_hooks);
+    w.omp_hooks = addSwitchRow(g2, "oh-my-pi Integration", if (cfg.omp_hooks) "Sidebar shows omp session status and notifications." else "omp runs without seance integration.", cfg.omp_hooks);
     addToPage(page, g2);
 
     // Card 3: Port Configuration
@@ -700,6 +702,8 @@ fn onSwitchChanged(obj: *c.GObject, _: *c.GParamSpec, _: c.gpointer) callconv(.c
         cfg.opencode_hooks = active;
     } else if (widget == w.antigravity_hooks) {
         cfg.antigravity_hooks = active;
+    } else if (widget == w.omp_hooks) {
+        cfg.omp_hooks = active;
     } else return;
 
     saveAndReload();

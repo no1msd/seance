@@ -63,6 +63,24 @@ any existing status-line script and verify its output survives setup. Antigravit
 also reports idle after cancellation, so notifications describe readiness rather
 than successful completion. Use an isolated profile for permission-setting changes.
 
+The same Python discovery command runs the oh-my-pi wrapper tests, the `omp-hook`
+socket-boundary tests against the built binary, and, with Node installed, the
+extension tests. To also check the extension against an installed omp binary
+(RPC mode, no model calls), and optionally prompted turns with a small model,
+which spend tokens and need its authentication:
+
+```bash
+SEANCE_TEST_OMP="$(command -v omp)" python3 -m unittest discover -s tests -p 'test_omp.py' -v
+SEANCE_TEST_OMP="$(command -v omp)" SEANCE_TEST_OMP_MODEL=haiku \
+  python3 -m unittest discover -s tests -p 'test_omp.py' -v
+```
+
+For a live check, launch `omp` in a pane of the new build. Confirm tool labels,
+a question and an approval (**Needs input** plus one notification each), one
+completion notification per turn with no duplicate from omp itself, that a
+subagent never clears the status early, and that `/exit`, Ctrl+C and `kill -9`
+of the omp process all clear it. `/new` and `/fork` keep the session tracked.
+
 Fullscreen tests require Openbox, Xvfb, xdotool, setxkbmap, a C compiler, and
 libadwaita headers. They use a separate X server and window manager. Shell
 integration tests require zsh and check user startup files and both sets of hooks:

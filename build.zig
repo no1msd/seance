@@ -216,6 +216,7 @@ pub fn build(b: *std.Build) void {
     });
 
     b.installFile("resources/opencode/seance.mjs", "share/seance/opencode/seance.mjs");
+    b.installFile("resources/omp/seance.mjs", "share/seance/omp/seance.mjs");
 
     // Install bundled icons (from GNOME Icon Library) into hicolor theme
     b.installDirectory(.{

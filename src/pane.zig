@@ -801,7 +801,7 @@ fn initSurface(pane: *Pane, width: u32, height: u32) void {
     }
 
     // Build env var array
-    var env_vars: [19]c.ghostty_env_var_s = undefined;
+    var env_vars: [20]c.ghostty_env_var_s = undefined;
     var env_count: usize = 0;
 
     env_vars[env_count] = .{ .key = ws_key, .value = ws_val };
@@ -848,6 +848,11 @@ fn initSurface(pane: *Pane, width: u32, height: u32) void {
         env_vars[env_count] = .{ .key = "SEANCE_ANTIGRAVITY_HOOKS_DISABLED", .value = "1" };
         env_count += 1;
     }
+    // Always set, not only when disabled: a tracked omp exports `1` to its
+    // children, and a Séance started from one would otherwise hand that to
+    // every new pane and leave omp untracked there.
+    env_vars[env_count] = .{ .key = "SEANCE_OMP_HOOKS_DISABLED", .value = if (cfg.omp_hooks) "0" else "1" };
+    env_count += 1;
     env_vars[env_count] = .{ .key = "SEANCE_SHELL_INTEGRATION", .value = "1" };
     env_count += 1;
     env_vars[env_count] = .{ .key = "TERM_PROGRAM", .value = "ghostty" };

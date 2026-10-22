@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+# Load the bundled extension for this invocation; omp's own settings stay untouched.
+set -euo pipefail
+
+WRAPPER_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+REAL_OMP=""
+IFS=: read -ra PATH_DIRS <<< "$PATH"
+for dir in "${PATH_DIRS[@]}"; do
+    dir="${dir:-.}"
+    resolved="$(cd "$dir" 2>/dev/null && pwd -P)" || continue
+    [[ "$resolved" == "$WRAPPER_DIR" ]] && continue
+    if [[ -f "$dir/omp" && -x "$dir/omp" && ! "$dir/omp" -ef "${BASH_SOURCE[0]}" ]]; then
+        REAL_OMP="$resolved/omp"
+        break
+    fi
+done
+if [[ -z "$REAL_OMP" ]]; then
+    echo "omp: command not found" >&2
+    exit 127
+fi
+
+if [[ -z "${SEANCE_SURFACE_ID:-}" || -z "${SEANCE_WORKSPACE_ID:-}" ||
+      -z "${SEANCE_SOCKET_PATH:-}" || "${SEANCE_OMP_HOOKS_DISABLED:-}" == 1 ]]; then
+    exec "$REAL_OMP" "$@"
+fi
+
+# Only the interactive TUI is tracked: print, export and machine-readable modes
+# have no pane status to show, and subcommands never start a session.
+# --trusted-extension is an exact extension allowlist that omp refuses to
+# combine with -e, so those launches run untracked.
+# Everything after `--` is message text to omp, not options.
+prev=""
+for arg in "$@"; do
+    case "$arg" in
+        --) break ;;
+        -h|--help|-v|--version|-p|--print|--export|--export=*|--alias|--alias=*|--trusted-extension|--trusted-extension=*) exec "$REAL_OMP" "$@" ;;
+        --mode=text) ;;
+        --mode=*) exec "$REAL_OMP" "$@" ;;
+    esac
+    if [[ "$prev" == --mode && "$arg" != text ]]; then
+        exec "$REAL_OMP" "$@"
+    fi
+    prev="$arg"
+done
+case "${1:-}" in
+    acp|agents|anonymize|auth|auth-broker|auth-gateway|bench|browser-relay|cleanse|clip|collab|commit|completions|compress|config|dry-balance|find|gallery|gc|git|grep|grievances|if-bench|images|install|join|login|models|play|plugin|predict|ps|read|render|say|search|session|setup|share|shell|skill|ssh|stats|stream|tiny-models|token|toks|ttsr|update|usage|worktree)
+        exec "$REAL_OMP" "$@" ;;
+esac
+
+# Resolve the matching binary from our install prefix (also inside AppImages).
+# Do not accidentally call an older seance found on PATH.
+SEANCE_OMP_BIN="$WRAPPER_DIR/../../../bin/seance"
+EXTENSION="$WRAPPER_DIR/../omp/seance.mjs"
+if [[ ! -x "$SEANCE_OMP_BIN" || ! -r "$EXTENSION" ]] ||
+   ! timeout 0.75 "$SEANCE_OMP_BIN" ctl ping >/dev/null 2>&1; then
+    exec "$REAL_OMP" "$@"
+fi
+export SEANCE_OMP_BIN
+export SEANCE_OMP_PID=$$
+# An omp started from this session (its shell tool, a `!` command) must not
+# take over this pane's status.
+export SEANCE_OMP_HOOKS_DISABLED=1
+
+# EXIT also runs when omp is killed, so the pane never keeps a stale status.
+# Never mask the agent's exit status or leak hook output into the terminal.
+trap 'timeout 3 "$SEANCE_OMP_BIN" ctl omp-hook session-end <<< "{}" >/dev/null 2>&1 || true' EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+trap 'exit 129' HUP
+rc=0
+"$REAL_OMP" -e "$EXTENSION" "$@" || rc=$?
+exit "$rc"

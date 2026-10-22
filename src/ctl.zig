@@ -145,6 +145,7 @@ fn dispatch(ctx: Ctx, command: []const u8) u8 {
     if (eql(command, "codex-hook")) return cmdCodexHook(ctx);
     if (eql(command, "pi-hook")) return cmdPiHook(ctx);
     if (eql(command, "opencode-hook")) return cmdAgentHook(ctx, opencode_agent);
+    if (eql(command, "omp-hook")) return cmdAgentHook(ctx, omp_agent);
     if (eql(command, "opencode-config")) return cmdOpencodeConfig(ctx);
     if (eql(command, "antigravity-config")) return cmdAntigravityConfig(ctx);
     if (eql(command, "antigravity-hook")) return cmdAntigravityHook(ctx);
@@ -1254,6 +1255,20 @@ const antigravity_agent = AgentConfig{
     .session_dir_env = null,
 };
 
+const omp_agent = AgentConfig{
+    .name = "omp",
+    .display_name = "oh-my-pi",
+    .usage = "usage: omp-hook <session-start|session-end|prompt-submit|pre-tool-use|post-tool-use|notification|stop|state>\n",
+    .pid_env = "SEANCE_OMP_PID",
+    .response = "OK\n",
+    .status_key_prefix = "omp",
+    .status_key_mode = .surface,
+    .has_ask_user_handling = false,
+    .has_notification_hook = true,
+    .has_post_tool_hook = true,
+    .session_dir_env = null,
+};
+
 fn cmdAntigravityConfig(ctx: Ctx) u8 {
     if (ctx.rest.len != 1) return 1;
     @import("antigravity.zig").install(ctx.alloc, ctx.rest[0]) catch |err| {
@@ -1418,7 +1433,7 @@ fn cmdAgentHook(ctx: Ctx, agent: AgentConfig) u8 {
         if (agent.has_notification_hook) return agentHookNotification(h);
     }
     if (eql(hook_cmd, "stop")) return agentHookStop(h);
-    if (eql(agent.name, "OpenCode") and eql(hook_cmd, "state")) return agentHookOpenCodeState(h);
+    if ((eql(agent.name, "OpenCode") or eql(agent.name, "omp")) and eql(hook_cmd, "state")) return agentHookOpenCodeState(h);
 
     wfmt("seance: unknown hook '{s}'\n", .{hook_cmd});
     return 1;
@@ -1679,10 +1694,10 @@ fn toolDescription(alloc: Allocator, tool_name: ?[]const u8, data: JsonValue) []
 
     const ti_obj = if (tool_input == .object) tool_input.object else null;
 
-    if (eql(tn, "Read")) return tiFileDesc(alloc, ti_obj, "Reading");
-    if (eql(tn, "Edit")) return tiFileDesc(alloc, ti_obj, "Editing");
-    if (eql(tn, "Write")) return tiFileDesc(alloc, ti_obj, "Writing");
-    if (eql(tn, "Bash")) {
+    if (eql(tn, "Read") or eql(tn, "read")) return tiFileDesc(alloc, ti_obj, "Reading");
+    if (eql(tn, "Edit") or eql(tn, "edit")) return tiFileDesc(alloc, ti_obj, "Editing");
+    if (eql(tn, "Write") or eql(tn, "write")) return tiFileDesc(alloc, ti_obj, "Writing");
+    if (eql(tn, "Bash") or eql(tn, "bash")) {
         if (ti_obj) |obj| {
             if (obj.get("command")) |cmd| {
                 if (cmd == .string) {
@@ -1693,9 +1708,9 @@ fn toolDescription(alloc: Allocator, tool_name: ?[]const u8, data: JsonValue) []
         }
         return "Running command";
     }
-    if (eql(tn, "Glob")) return tiPatternDesc(alloc, ti_obj, "Searching");
-    if (eql(tn, "Grep")) return tiPatternDesc(alloc, ti_obj, "Searching");
-    if (eql(tn, "Agent")) {
+    if (eql(tn, "Glob") or eql(tn, "glob")) return tiPatternDesc(alloc, ti_obj, "Searching");
+    if (eql(tn, "Grep") or eql(tn, "grep")) return tiPatternDesc(alloc, ti_obj, "Searching");
+    if (eql(tn, "Agent") or eql(tn, "task")) {
         if (ti_obj) |obj| {
             if (obj.get("description")) |d| {
                 if (d == .string) {
@@ -1706,13 +1721,13 @@ fn toolDescription(alloc: Allocator, tool_name: ?[]const u8, data: JsonValue) []
         return "Agent";
     }
     if (eql(tn, "WebFetch")) return "Fetching URL";
-    if (eql(tn, "WebSearch")) return tiQueryDesc(alloc, ti_obj, "Searching web");
+    if (eql(tn, "WebSearch") or eql(tn, "web_search")) return tiQueryDesc(alloc, ti_obj, "Searching web");
     return tn;
 }
 
 fn tiFileDesc(alloc: Allocator, obj: ?std.json.ObjectMap, verb: []const u8) []const u8 {
     if (obj) |o| {
-        if (o.get("file_path")) |fp| {
+        if (o.get("file_path") orelse o.get("path")) |fp| {
             if (fp == .string) return std.fmt.allocPrint(alloc, "{s} {s}", .{ verb, std.fs.path.basename(fp.string) }) catch verb;
         }
     }
@@ -2224,6 +2239,11 @@ fn printUsage() void {
         \\Antigravity CLI Hooks:
         \\  antigravity-hook <state|session-end>  Track Antigravity CLI status
         \\  antigravity-config <settings.json>   Install its status callback
+        \\
+        \\oh-my-pi Hooks:
+        \\  omp-hook <event>        Handle an oh-my-pi lifecycle event from the bundled extension
+        \\    Events: session-start, session-end, prompt-submit, pre-tool-use,
+        \\            post-tool-use, notification, stop, state
         \\
     );
 }

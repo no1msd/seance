@@ -24,7 +24,7 @@
 
 ## Why Séance?
 
-Séance is a GTK4 terminal multiplexer for Linux. It auto-detects [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [Codex](https://github.com/openai/codex), [Pi](https://github.com/badlogic/pi-mono), [OpenCode](https://opencode.ai), and [Antigravity CLI](https://antigravity.google/docs/cli/getting-started) sessions running inside it and tracks their status (working, waiting for permission, idle) live in the sidebar. Permission requests and task completions are surfaced as desktop notifications with unread tracking. No manual dotfile edits: open an agent in a pane to track it.
+Séance is a GTK4 terminal multiplexer for Linux. It auto-detects [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [Codex](https://github.com/openai/codex), [Pi](https://github.com/badlogic/pi-mono), [oh-my-pi](https://github.com/can1357/oh-my-pi), [OpenCode](https://opencode.ai), and [Antigravity CLI](https://antigravity.google/docs/cli/getting-started) sessions running inside it and tracks their status (working, waiting for permission, idle) live in the sidebar. Permission requests and task completions are surfaced as desktop notifications with unread tracking. No manual dotfile edits: open an agent in a pane to track it.
 
 ### Linux-native, not Electron
 
@@ -36,7 +36,7 @@ Panes are arranged in a horizontal strip that you scroll through, borrowing the 
 
 ### Agent-agnostic
 
-Claude Code, Codex, Pi, OpenCode, and Antigravity CLI are auto-tracked out of the box. Agents that do not expose lifecycle events still get all the plain multiplexer features.
+Claude Code, Codex, Pi, oh-my-pi, OpenCode, and Antigravity CLI are auto-tracked out of the box. Agents that do not expose lifecycle events still get all the plain multiplexer features.
 
 Codex requires a one-time review of Séance's hooks via `/hooks`. Approval persists
 across panes and restarts; changes to the hook definitions require a new review.
@@ -68,6 +68,18 @@ background permission requests, and non-tool input dialogs are not covered.
 An explicitly disabled status-line callback is respected and disables tracking.
 Disable the integration in **Settings → Integrations → Antigravity CLI Integration**,
 or set `antigravity-hooks = false` under `[behavior]`, then open a new pane.
+
+oh-my-pi (`omp`) loads Séance's bundled extension with `-e` for each interactive
+launch, so settings, profiles, installed extensions, and history stay in place.
+Tool calls, questions (`ask`), and tool approvals are shown in the sidebar;
+questions and approvals show **Needs input** with a notification, and each
+finished turn sends one completion notification. omp's own completion and
+question notifications are turned off for tracked sessions unless they are set
+explicitly in its settings. Subagents, print mode (`-p`), `--mode json|rpc|rpc-ui`,
+subcommands such as `omp commit`, and an `omp` started from inside a tracked
+session are not tracked. The status is cleared when omp exits, even if it is killed.
+Disable tracking in **Settings → Integrations → oh-my-pi Integration**, or set
+`omp-hooks = false` under `[behavior]`, then open a new pane.
 
 ### Scriptable
 

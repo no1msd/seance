@@ -71,6 +71,9 @@ pub const Config = struct {
     // Antigravity CLI integration
     antigravity_hooks: bool = true,
 
+    // oh-my-pi (omp) integration
+    omp_hooks: bool = true,
+
     // Notifications
     notification_sound: NotificationSound = .default,
 
@@ -280,6 +283,7 @@ pub fn saveConfig(cfg: *const Config) void {
     writeBool(w, "pi-hooks", cfg.pi_hooks) catch return;
     writeBool(w, "opencode-hooks", cfg.opencode_hooks) catch return;
     writeBool(w, "antigravity-hooks", cfg.antigravity_hooks) catch return;
+    writeBool(w, "omp-hooks", cfg.omp_hooks) catch return;
 
     // [notifications]
     w.print("\n[notifications]\n", .{}) catch return;
@@ -496,6 +500,9 @@ fn applyValue(config: *Config, section: []const u8, key: []const u8, raw_val: []
         } else if (eql(key, "antigravity-hooks")) {
             config.antigravity_hooks = parseBool(val) orelse config.antigravity_hooks;
             return true;
+        } else if (eql(key, "omp-hooks")) {
+            config.omp_hooks = parseBool(val) orelse config.omp_hooks;
+            return true;
         }
     } else if (eql(section, "notifications")) {
         if (eql(key, "sound")) {
@@ -700,12 +707,14 @@ test "parseToml: boolean values in behavior section" {
         \\confirm-close-window = false
         \\opencode-hooks = false
         \\antigravity-hooks = false
+        \\omp-hooks = false
         \\desktop-notifications = false
     );
     try std.testing.expectEqual(true, cfg.focus_follows_mouse);
     try std.testing.expectEqual(false, cfg.confirm_close_window);
     try std.testing.expectEqual(false, cfg.opencode_hooks);
     try std.testing.expectEqual(false, cfg.antigravity_hooks);
+    try std.testing.expectEqual(false, cfg.omp_hooks);
     try std.testing.expectEqual(false, cfg.desktop_notifications);
 }
 
